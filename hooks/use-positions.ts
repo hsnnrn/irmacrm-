@@ -1,0 +1,128 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabase";
+import type { Tables } from "@/lib/supabase";
+
+type Position = Tables<"positions">;
+
+export function usePositions() {
+  return useQuery({
+    queryKey: ["positions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("positions")
+        .select(`
+          *,
+          customers:customer_id (
+            id,
+            company_name,
+            contact_person,
+            email,
+            phone
+          ),
+          suppliers:supplier_id (
+            id,
+            company_name,
+            payment_term_days
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function usePosition(id: string) {
+  return useQuery({
+    queryKey: ["position", id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("positions")
+        .select(`
+          *,
+          customers:customer_id (
+            id,
+            company_name,
+            contact_person,
+            email,
+            phone,
+            tax_id
+          ),
+          suppliers:supplier_id (
+            id,
+            company_name,
+            tax_id,
+            payment_term_days
+          )
+        `)
+        .eq("id", id)
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useCreatePosition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (position: Partial<Position>) => {
+      const { data, error } = await supabase
+        .from("positions")
+        .insert(position)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+    },
+  });
+}
+
+export function useUpdatePosition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, ...position }: Partial<Position> & { id: string }) => {
+      const { data, error } = await supabase
+        .from("positions")
+        .update(position)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["position", variables.id] });
+    },
+  });
+}
+
+export function useDeletePosition() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("positions")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["positions"] });
+    },
+  });
+}
+
