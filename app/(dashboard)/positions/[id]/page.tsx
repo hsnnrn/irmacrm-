@@ -239,7 +239,7 @@ export default function PositionDetailPage({
           <CardHeader className="pb-2">
             <CardDescription>Tahmini Kar</CardDescription>
             <CardTitle className="text-2xl font-bold text-green-600">
-              {formatCurrency(typedPosition.estimated_profit, typedPosition.sales_currency)}
+              {formatCurrency(typedPosition.estimated_profit ?? 0, typedPosition.sales_currency)}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -438,7 +438,7 @@ export default function PositionDetailPage({
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-3xl font-bold">
-                      {formatCurrency(typedPosition.sales_price, typedPosition.sales_currency)}
+                      {formatCurrency(typedPosition.sales_price ?? 0, typedPosition.sales_currency)}
                     </p>
                     <p className="text-sm text-gray-500">Müşteriden</p>
                   </div>
@@ -465,7 +465,7 @@ export default function PositionDetailPage({
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-3xl font-bold">
-                      {formatCurrency(typedPosition.cost_price, typedPosition.cost_currency)}
+                      {formatCurrency(typedPosition.cost_price ?? 0, typedPosition.cost_currency)}
                     </p>
                     <p className="text-sm text-gray-500">Tedarikçiye</p>
                   </div>
