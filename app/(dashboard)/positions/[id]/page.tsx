@@ -38,7 +38,7 @@ import type { PositionStatus, DocumentType } from "@/lib/position-utils";
 import { DocumentUploadDialog } from "@/components/business/document-upload-dialog";
 import { DocumentViewDialog } from "@/components/business/document-view-dialog";
 import { StatusChangeDialog } from "@/components/business/status-change-dialog";
-import { usePosition, useUpdatePosition } from "@/hooks/use-positions";
+import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/hooks/use-positions";
 import { useDocuments } from "@/hooks/use-documents";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
@@ -104,7 +104,7 @@ export default function PositionDetailPage({
   }
 
   // Type assertion for position with relations
-  const typedPosition = position as Position;
+  const typedPosition = position as PositionWithRelations;
 
   // Process documents data
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);

@@ -6,8 +6,8 @@ type Position = Tables<"positions">;
 type Customer = Tables<"customers">;
 type Supplier = Tables<"suppliers">;
 
-// Position with joined relations
-type PositionWithRelations = Position & {
+// Position with joined relations - exported for use in position detail page
+export type PositionWithRelations = Position & {
   customers: Customer | null;
   suppliers: Supplier | null;
 };
