@@ -77,7 +77,7 @@ export function usePosition(id: string) {
 export function useCreatePosition() {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  return useMutation<Position, Error, Partial<Position>>({
     mutationFn: async (position: Partial<Position>) => {
       const { data, error } = await supabase
         .from("positions")
@@ -86,7 +86,7 @@ export function useCreatePosition() {
         .single();
 
       if (error) throw error;
-      return data;
+      return data as Position;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["positions"] });
