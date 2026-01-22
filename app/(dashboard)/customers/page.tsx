@@ -23,9 +23,6 @@ import { Input } from "@/components/ui/input";
 import { CustomerDialog } from "@/components/business/customer-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useCustomers, useDeleteCustomer } from "@/hooks/use-customers";
-import type { Tables } from "@/lib/supabase";
-
-type Customer = Tables<"customers">;
 import { useToast } from "@/hooks/use-toast";
 import { exportToExcel, formatDateForExport, formatCurrencyForExport } from "@/lib/export-utils";
 import {
@@ -59,13 +56,12 @@ export default function CustomersPage() {
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
 
   const filteredCustomers = useMemo(() => {
-    if (!customers) return [] as Customer[];
-    return customers.filter(
-      (customer: Customer) =>
-        customer.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (customer.contact_person?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-        (customer.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-    );
+    return (customers || []).filter(
+    (customer) =>
+      customer.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (customer.contact_person?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (customer.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+  );
   }, [customers, searchTerm]);
 
   const {
@@ -217,7 +213,7 @@ export default function CustomersPage() {
             <CardDescription>Toplam Risk Limiti</CardDescription>
             <CardTitle className="text-3xl">
               {formatCurrency(
-                (customers || []).reduce((sum, c: Customer) => sum + (c.risk_limit || 0), 0),
+                (customers || []).reduce((sum, c) => sum + (c.risk_limit || 0), 0),
                 "TRY"
               )}
             </CardTitle>
@@ -228,7 +224,7 @@ export default function CustomersPage() {
             <CardDescription>Mevcut Bakiye</CardDescription>
             <CardTitle className="text-3xl">
               {formatCurrency(
-                (customers || []).reduce((sum, c: Customer) => sum + (c.current_balance || 0), 0),
+                (customers || []).reduce((sum, c) => sum + (c.current_balance || 0), 0),
                 "TRY"
               )}
             </CardTitle>
