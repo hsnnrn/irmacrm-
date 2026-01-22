@@ -135,13 +135,44 @@ export function calculateProfit(
   return salesInTRY - costInTRY;
 }
 
+// Json tipi (DB'den gelen exchange_rates_snapshot string veya object olabilir)
+type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+
+/**
+ * exchange_rates_snapshot'ı güvenli şekilde object'e çevirir.
+ * DB'den string gelirse JSON.parse, object ise olduğu gibi kullanır.
+ */
+function normalizeExchangeRatesSnapshot(
+  raw: Json | null | undefined
+): Record<string, unknown> | null {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  return null;
+}
+
 /**
  * Pozisyondan satış/maliyet için TRY kuru al.
  * Öncelik: sales_exchange_rate/cost_exchange_rate, exchange_rates_snapshot.sales_rate/cost_rate,
  * sonra USD_TRY, EUR_TRY, RUB_TRY. TRY ise 1.
  */
 export function getPositionExchangeRate(
-  position: { sales_currency?: string; cost_currency?: string; sales_exchange_rate?: number | null; cost_exchange_rate?: number | null; exchange_rates_snapshot?: Record<string, unknown> | null },
+  position: {
+    sales_currency?: string;
+    cost_currency?: string;
+    sales_exchange_rate?: number | null;
+    cost_exchange_rate?: number | null;
+    exchange_rates_snapshot?: Json | null;
+  },
   type: "sales" | "cost"
 ): number {
   const currency = type === "sales" ? position.sales_currency : position.cost_currency;
@@ -150,7 +181,7 @@ export function getPositionExchangeRate(
   const col = type === "sales" ? position.sales_exchange_rate : position.cost_exchange_rate;
   if (col != null && col > 0) return col;
 
-  const snap = position.exchange_rates_snapshot as Record<string, number> | undefined;
+  const snap = normalizeExchangeRatesSnapshot(position.exchange_rates_snapshot) as Record<string, number> | undefined;
   if (snap) {
     const k = type === "sales" ? "sales_rate" : "cost_rate";
     if (typeof snap[k] === "number" && snap[k] > 0) return snap[k];
