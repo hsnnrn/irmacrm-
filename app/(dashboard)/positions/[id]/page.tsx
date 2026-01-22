@@ -103,6 +103,9 @@ export default function PositionDetailPage({
     );
   }
 
+  // Type assertion for position with relations
+  const typedPosition = position as Position;
+
   // Process documents data
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
   const documentsMap = new Map(
@@ -128,7 +131,7 @@ export default function PositionDetailPage({
   const closureCheck = canClose(uploadedDocTypes, invoices);
 
   const allowedStatuses = getNextAllowedStatuses(
-    position.status as PositionStatus,
+    typedPosition.status as PositionStatus,
     departureCheck.canDepart,
     closureCheck.canClose
   );
@@ -160,7 +163,7 @@ export default function PositionDetailPage({
   const handleStatusChange = async (newStatus: PositionStatus) => {
     try {
       await updatePosition.mutateAsync({
-        id: position.id,
+        id: typedPosition.id,
         status: newStatus,
         updated_at: new Date().toISOString(),
       });
@@ -178,8 +181,8 @@ export default function PositionDetailPage({
     }
   };
 
-  const customerName = (position.customers as any)?.company_name || "Müşteri";
-  const supplierName = (position.suppliers as any)?.company_name || "Tedarikçi";
+  const customerName = typedPosition.customers?.company_name || "Müşteri";
+  const supplierName = typedPosition.suppliers?.company_name || "Tedarikçi";
 
   return (
     <div className="space-y-6">
@@ -194,22 +197,22 @@ export default function PositionDetailPage({
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">
-                Pozisyon #{position.position_no}
+                Pozisyon #{typedPosition.position_no}
               </h1>
               <Badge
                 variant={
-                  STATUS_COLORS[position.status] as
+                  STATUS_COLORS[typedPosition.status] as
                     | "success"
                     | "warning"
                     | "danger"
                     | "default"
                 }
               >
-                {STATUS_LABELS[position.status]}
+                {STATUS_LABELS[typedPosition.status]}
               </Badge>
             </div>
             <p className="text-gray-500">
-              {position.loading_point} → {position.unloading_point}
+              {typedPosition.loading_point} → {typedPosition.unloading_point}
             </p>
           </div>
         </div>
@@ -236,7 +239,7 @@ export default function PositionDetailPage({
           <CardHeader className="pb-2">
             <CardDescription>Tahmini Kar</CardDescription>
             <CardTitle className="text-2xl font-bold text-green-600">
-              {formatCurrency(position.estimated_profit, position.sales_currency)}
+              {formatCurrency(typedPosition.estimated_profit, typedPosition.sales_currency)}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -244,15 +247,15 @@ export default function PositionDetailPage({
           <CardHeader className="pb-2">
             <CardDescription>Referans No</CardDescription>
             <CardTitle className="font-mono text-sm">
-              {position.supplier_ref_no}
+              {typedPosition.supplier_ref_no}
             </CardTitle>
           </CardHeader>
         </Card>
       </div>
 
       {/* Missing Actions Alert */}
-      {((position.status === "READY_TO_DEPART" && !departureCheck.canDepart) ||
-        (position.status === "DELIVERED" && !closureCheck.canClose)) && (
+      {((typedPosition.status === "READY_TO_DEPART" && !departureCheck.canDepart) ||
+        (typedPosition.status === "DELIVERED" && !closureCheck.canClose)) && (
         <Card className="border-red-300 bg-red-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-700">
@@ -265,7 +268,7 @@ export default function PositionDetailPage({
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {position.status === "READY_TO_DEPART" &&
+              {typedPosition.status === "READY_TO_DEPART" &&
                 !departureCheck.canDepart && (
                   <div className="rounded-lg bg-red-100 p-3">
                     <p className="font-semibold text-red-800">
@@ -278,7 +281,7 @@ export default function PositionDetailPage({
                     </ul>
                   </div>
                 )}
-              {position.status === "DELIVERED" && !closureCheck.canClose && (
+              {typedPosition.status === "DELIVERED" && !closureCheck.canClose && (
                 <div className="rounded-lg bg-red-100 p-3">
                   <p className="font-semibold text-red-800">
                     Kapatmak için eksik işlemler:
@@ -314,15 +317,15 @@ export default function PositionDetailPage({
               <CardContent className="space-y-3">
                 <div>
                   <p className="text-sm text-gray-500">Yükleme Noktası</p>
-                  <p className="font-semibold">{position.loading_point}</p>
+                  <p className="font-semibold">{typedPosition.loading_point}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Boşaltma Noktası</p>
-                  <p className="font-semibold">{position.unloading_point}</p>
+                  <p className="font-semibold">{typedPosition.unloading_point}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Yük Açıklaması</p>
-                  <p className="font-semibold">{position.cargo_description}</p>
+                  <p className="font-semibold">{typedPosition.cargo_description}</p>
                 </div>
               </CardContent>
             </Card>
@@ -335,22 +338,22 @@ export default function PositionDetailPage({
                 <div>
                   <p className="text-sm text-gray-500">Oluşturulma</p>
                   <p className="font-semibold">
-                    {formatDate(position.created_at)}
+                    {formatDate(typedPosition.created_at)}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Kalkış Tarihi</p>
                   <p className="font-semibold">
-                    {position.departure_date
-                      ? formatDate(position.departure_date)
+                    {typedPosition.departure_date
+                      ? formatDate(typedPosition.departure_date)
                       : "Henüz yola çıkmadı"}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Teslimat Tarihi</p>
                   <p className="font-semibold">
-                    {position.delivery_date
-                      ? formatDate(position.delivery_date)
+                    {typedPosition.delivery_date
+                      ? formatDate(typedPosition.delivery_date)
                       : "Henüz teslim edilmedi"}
                   </p>
                 </div>
@@ -435,16 +438,16 @@ export default function PositionDetailPage({
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-3xl font-bold">
-                      {formatCurrency(position.sales_price, position.sales_currency)}
+                      {formatCurrency(typedPosition.sales_price, typedPosition.sales_currency)}
                     </p>
                     <p className="text-sm text-gray-500">Müşteriden</p>
                   </div>
-                  {position.sales_currency !== "TRY" && (
+                  {typedPosition.sales_currency !== "TRY" && (
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(position, "sales").toFixed(4)}</p>
+                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "sales").toFixed(4)}</p>
                       <p className="text-sm font-medium text-gray-700">
                         {formatCurrency(
-                          (position.sales_price || 0) * getPositionExchangeRate(position, "sales"),
+                          (typedPosition.sales_price || 0) * getPositionExchangeRate(typedPosition, "sales"),
                           "TRY"
                         )}
                       </p>
@@ -462,16 +465,16 @@ export default function PositionDetailPage({
                 <div className="flex justify-between items-end">
                   <div>
                     <p className="text-3xl font-bold">
-                      {formatCurrency(position.cost_price, position.cost_currency)}
+                      {formatCurrency(typedPosition.cost_price, typedPosition.cost_currency)}
                     </p>
                     <p className="text-sm text-gray-500">Tedarikçiye</p>
                   </div>
-                  {position.cost_currency !== "TRY" && (
+                  {typedPosition.cost_currency !== "TRY" && (
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(position, "cost").toFixed(4)}</p>
+                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "cost").toFixed(4)}</p>
                       <p className="text-sm font-medium text-gray-700">
                         {formatCurrency(
-                          (position.cost_price || 0) * getPositionExchangeRate(position, "cost"),
+                          (typedPosition.cost_price || 0) * getPositionExchangeRate(typedPosition, "cost"),
                           "TRY"
                         )}
                       </p>
@@ -490,23 +493,23 @@ export default function PositionDetailPage({
                   <div>
                     <p className="text-3xl font-bold text-green-600">
                       {formatCurrency(
-                        position.estimated_profit ?? 0,
-                        position.sales_currency
+                        typedPosition.estimated_profit ?? 0,
+                        typedPosition.sales_currency
                       )}
                     </p>
                     <p className="text-sm text-green-700">
-                      {(position.sales_price && Number(position.sales_price) !== 0)
-                        ? `%${(((position.estimated_profit ?? 0) / Number(position.sales_price)) * 100).toFixed(1)} kar marjı`
+                      {(typedPosition.sales_price && Number(typedPosition.sales_price) !== 0)
+                        ? `%${(((typedPosition.estimated_profit ?? 0) / Number(typedPosition.sales_price)) * 100).toFixed(1)} kar marjı`
                         : "—"}
                     </p>
                   </div>
-                  {position.sales_currency !== "TRY" && (
+                  {typedPosition.sales_currency !== "TRY" && (
                     <div className="text-right">
                       <p className="text-xs text-green-700">TRY Karşılığı</p>
                       <p className="text-sm font-bold text-green-700">
                         {formatCurrency(
-                          (position.sales_price || 0) * getPositionExchangeRate(position, "sales") -
-                          (position.cost_price || 0) * getPositionExchangeRate(position, "cost"),
+                          (typedPosition.sales_price || 0) * getPositionExchangeRate(typedPosition, "sales") -
+                            (typedPosition.cost_price || 0) * getPositionExchangeRate(typedPosition, "cost"),
                           "TRY"
                         )}
                       </p>
@@ -526,7 +529,7 @@ export default function PositionDetailPage({
                     Tedarikçi Referans Numarası
                   </p>
                   <p className="font-mono text-lg font-bold text-red-700">
-                    {position.supplier_ref_no}
+                    {typedPosition.supplier_ref_no}
                   </p>
                   <p className="mt-2 text-sm text-red-600">
                     Bu referans numarasını tedarikçiye iletirken kullanın.
@@ -556,7 +559,7 @@ export default function PositionDetailPage({
                   <div className="flex-1">
                     <p className="font-medium">Pozisyon Oluşturuldu</p>
                     <p className="text-sm text-gray-500">
-                      {formatDate(position.created_at)}
+                      {formatDate(typedPosition.created_at)}
                     </p>
                   </div>
                 </div>
@@ -586,7 +589,7 @@ export default function PositionDetailPage({
       <StatusChangeDialog
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
-        currentStatus={position.status}
+        currentStatus={typedPosition.status}
         allowedStatuses={allowedStatuses}
         onStatusChange={handleStatusChange}
       />

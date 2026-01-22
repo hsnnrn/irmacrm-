@@ -3,9 +3,17 @@ import { supabase } from "@/lib/supabase";
 import type { Tables } from "@/lib/supabase";
 
 type Position = Tables<"positions">;
+type Customer = Tables<"customers">;
+type Supplier = Tables<"suppliers">;
+
+// Position with joined relations
+type PositionWithRelations = Position & {
+  customers: Customer | null;
+  suppliers: Supplier | null;
+};
 
 export function usePositions() {
-  return useQuery({
+  return useQuery<PositionWithRelations[]>({
     queryKey: ["positions"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -28,13 +36,13 @@ export function usePositions() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return data as PositionWithRelations[];
     },
   });
 }
 
 export function usePosition(id: string) {
-  return useQuery({
+  return useQuery<PositionWithRelations>({
     queryKey: ["position", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -60,7 +68,7 @@ export function usePosition(id: string) {
         .single();
 
       if (error) throw error;
-      return data;
+      return data as PositionWithRelations;
     },
     enabled: !!id,
   });
