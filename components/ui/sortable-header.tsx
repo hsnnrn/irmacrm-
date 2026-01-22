@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 interface SortableHeaderProps {
   label: string;
   sortKey: string;
-  currentSort: { key: string; direction: "asc" | "desc" } | null;
+  currentSort: { key: string | number | symbol; direction: "asc" | "desc" } | null;
   onSort: (key: string) => void;
   className?: string;
   align?: "left" | "right" | "center";
@@ -18,7 +18,7 @@ export function SortableHeader({
   className,
   align = "left",
 }: SortableHeaderProps) {
-  const isSorted = currentSort?.key === sortKey;
+  const isSorted = currentSort !== null && String(currentSort.key) === sortKey;
   
   return (
     <div 
