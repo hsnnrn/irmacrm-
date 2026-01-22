@@ -44,6 +44,9 @@ import {
 import { useTableFeatures } from "@/hooks/use-table-features";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import type { Tables } from "@/lib/supabase";
+
+type Customer = Tables<"customers">;
 
 export default function CustomersPage() {
   const { data: customers, isLoading, error } = useCustomers();
@@ -55,13 +58,14 @@ export default function CustomersPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
 
-  const filteredCustomers = useMemo(() => {
-    return (customers || []).filter(
-    (customer) =>
-      customer.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (customer.contact_person?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-      (customer.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-  );
+  const filteredCustomers = useMemo<Customer[]>(() => {
+    if (!customers) return [];
+    return customers.filter(
+      (customer: Customer) =>
+        customer.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (customer.contact_person?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+        (customer.email?.toLowerCase() || "").includes(searchTerm.toLowerCase())
+    );
   }, [customers, searchTerm]);
 
   const {
