@@ -201,14 +201,14 @@ export default function PositionDetailPage({
               </h1>
               <Badge
                 variant={
-                  STATUS_COLORS[typedPosition.status] as
+                  STATUS_COLORS[typedPosition.status as PositionStatus] as
                     | "success"
                     | "warning"
                     | "danger"
                     | "default"
                 }
               >
-                {STATUS_LABELS[typedPosition.status]}
+                {STATUS_LABELS[typedPosition.status as PositionStatus]}
               </Badge>
             </div>
             <p className="text-gray-500">
@@ -589,7 +589,7 @@ export default function PositionDetailPage({
       <StatusChangeDialog
         open={statusDialogOpen}
         onOpenChange={setStatusDialogOpen}
-        currentStatus={typedPosition.status}
+        currentStatus={typedPosition.status as PositionStatus}
         allowedStatuses={allowedStatuses}
         onStatusChange={handleStatusChange}
       />
