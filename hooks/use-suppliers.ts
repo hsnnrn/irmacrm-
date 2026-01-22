@@ -5,7 +5,7 @@ import type { Tables } from "@/lib/supabase";
 type Supplier = Tables<"suppliers">;
 
 export function useSuppliers() {
-  return useQuery({
+  return useQuery<Supplier[]>({
     queryKey: ["suppliers"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -14,13 +14,13 @@ export function useSuppliers() {
         .order("company_name", { ascending: true });
 
       if (error) throw error;
-      return data;
+      return data as Supplier[];
     },
   });
 }
 
 export function useSupplier(id: string) {
-  return useQuery({
+  return useQuery<Supplier>({
     queryKey: ["supplier", id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -30,7 +30,7 @@ export function useSupplier(id: string) {
         .single();
 
       if (error) throw error;
-      return data;
+      return data as Supplier;
     },
   });
 }
