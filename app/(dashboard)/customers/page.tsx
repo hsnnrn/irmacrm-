@@ -228,7 +228,7 @@ export default function CustomersPage() {
             <CardDescription>Mevcut Bakiye</CardDescription>
             <CardTitle className="text-3xl">
               {formatCurrency(
-                (customers || []).reduce((sum, c) => sum + (c.current_balance || 0), 0),
+                (customers || []).reduce((sum, c: Customer) => sum + (c.current_balance || 0), 0),
                 "TRY"
               )}
             </CardTitle>
