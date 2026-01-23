@@ -65,6 +65,7 @@ export function useUpdateCustomer() {
     mutationFn: async ({ id, ...customer }: CustomerUpdate & { id: string }) => {
       const { data, error } = await (supabase
         .from("customers") as any)
+        // @ts-ignore
         .update(customer)
         .eq("id", id)
         .select()
