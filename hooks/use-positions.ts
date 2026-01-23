@@ -83,8 +83,8 @@ export function useCreatePosition() {
     mutationFn: async (position: PositionInsert) => {
       const { data, error } = await supabase
         .from("positions")
-        // @ts-ignore
-        .insert([position] as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .insert([position])
         .select()
         .single();
 
@@ -104,8 +104,8 @@ export function useUpdatePosition() {
     mutationFn: async ({ id, ...position }: PositionUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("positions")
-        // @ts-ignore
-        .update(position as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .update(position)
         .eq("id", id)
         .select()
         .single();

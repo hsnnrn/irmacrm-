@@ -54,6 +54,10 @@ export function useUploadDocument() {
     }: UploadDocumentParams) => {
       // Upload file to Supabase Storage
       const uploadResult = await uploadDocument(file, positionId, type);
+      
+      if (!uploadResult) {
+        throw new Error("Belge yüklenirken bir hata oluştu");
+      }
 
       // Mevcut kullanıcı (varsa)
       const { data: { user } } = await supabase.auth.getUser();
@@ -69,10 +73,10 @@ export function useUploadDocument() {
         is_verified: false,
       };
       
-      // @ts-ignore
       const { data, error } = await supabase
         .from("documents")
-        .insert([documentData] as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .insert([documentData])
         .select()
         .single();
 
@@ -102,10 +106,10 @@ export function useVerifyDocument() {
       positionId: string;
     }) => {
       const updateData: DocumentUpdate = { is_verified: true };
-      // @ts-ignore
       const { data, error } = await supabase
         .from("documents")
-        .update(updateData as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .update(updateData)
         .eq("id", id)
         .select()
         .single();

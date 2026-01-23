@@ -66,8 +66,8 @@ export function useCreateInvoice() {
     mutationFn: async (invoice: InvoiceInsert) => {
       const { data, error } = await supabase
         .from("invoices")
-        // @ts-ignore
-        .insert([invoice] as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .insert([invoice])
         .select()
         .single();
 
@@ -87,8 +87,8 @@ export function useUpdateInvoice() {
     mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("invoices")
-        // @ts-ignore
-        .update(invoice as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .update(invoice)
         .eq("id", id)
         .select()
         .single();

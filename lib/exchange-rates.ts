@@ -63,14 +63,20 @@ export function convertCurrency(
   // Convert to TRY first
   let amountInTRY = amount;
   if (fromCurrency !== 'TRY') {
-    const rate = rates[fromCurrency as keyof Omit<ExchangeRates, 'lastUpdate'>];
+    const rate = rates[fromCurrency as keyof Omit<ExchangeRates, 'lastUpdate' | 'source' | 'error'>];
+    if (!rate) {
+      throw new Error(`Exchange rate not found for currency: ${fromCurrency}`);
+    }
     amountInTRY = amount * rate.selling;
   }
 
   // Then convert from TRY to target currency
   if (toCurrency === 'TRY') return amountInTRY;
   
-  const targetRate = rates[toCurrency as keyof Omit<ExchangeRates, 'lastUpdate'>];
+  const targetRate = rates[toCurrency as keyof Omit<ExchangeRates, 'lastUpdate' | 'source' | 'error'>];
+  if (!targetRate) {
+    throw new Error(`Exchange rate not found for currency: ${toCurrency}`);
+  }
   return amountInTRY / targetRate.buying;
 }
 

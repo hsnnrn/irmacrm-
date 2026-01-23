@@ -44,8 +44,8 @@ export function useCreateSupplier() {
     mutationFn: async (supplier: SupplierInsert) => {
       const { data, error } = await supabase
         .from("suppliers")
-        // @ts-ignore
-        .insert([supplier] as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .insert([supplier])
         .select()
         .single();
 
@@ -65,8 +65,8 @@ export function useUpdateSupplier() {
     mutationFn: async ({ id, ...supplier }: SupplierUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("suppliers")
-        // @ts-ignore
-        .update(supplier as any)
+        // @ts-ignore - Supabase type inference issue with Database types
+        .update(supplier)
         .eq("id", id)
         .select()
         .single();
