@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables, Inserts, Updates } from "@/lib/supabase";
-import type { Database } from "@/lib/database.types";
 
 type Supplier = Tables<"suppliers">;
 type SupplierInsert = Inserts<"suppliers">;
@@ -45,7 +44,7 @@ export function useCreateSupplier() {
     mutationFn: async (supplier: SupplierInsert) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .insert([supplier] as Database["public"]["Tables"]["suppliers"]["Insert"][])
+        .insert([supplier] as any)
         .select()
         .single();
 
@@ -65,7 +64,7 @@ export function useUpdateSupplier() {
     mutationFn: async ({ id, ...supplier }: SupplierUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .update(supplier as Database["public"]["Tables"]["suppliers"]["Update"])
+        .update(supplier as any)
         .eq("id", id)
         .select()
         .single();

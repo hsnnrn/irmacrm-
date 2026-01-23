@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Tables, Inserts, Updates } from "@/lib/supabase";
-import type { Database } from "@/lib/database.types";
 
 type Position = Tables<"positions">;
 type PositionInsert = Inserts<"positions">;
@@ -84,7 +83,7 @@ export function useCreatePosition() {
     mutationFn: async (position: PositionInsert) => {
       const { data, error } = await supabase
         .from("positions")
-        .insert([position] as Database["public"]["Tables"]["positions"]["Insert"][])
+        .insert([position] as any)
         .select()
         .single();
 
@@ -104,7 +103,7 @@ export function useUpdatePosition() {
     mutationFn: async ({ id, ...position }: PositionUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("positions")
-        .update(position as Database["public"]["Tables"]["positions"]["Update"])
+        .update(position as any)
         .eq("id", id)
         .select()
         .single();
