@@ -44,7 +44,7 @@ export function useCreateSupplier() {
     mutationFn: async (supplier: SupplierInsert) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .insert(supplier)
+        .insert(supplier as SupplierInsert)
         .select()
         .single();
 
@@ -64,7 +64,7 @@ export function useUpdateSupplier() {
     mutationFn: async ({ id, ...supplier }: SupplierUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .update(supplier)
+        .update(supplier as SupplierUpdate)
         .eq("id", id)
         .select()
         .single();

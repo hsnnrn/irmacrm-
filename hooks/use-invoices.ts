@@ -66,7 +66,7 @@ export function useCreateInvoice() {
     mutationFn: async (invoice: InvoiceInsert) => {
       const { data, error } = await supabase
         .from("invoices")
-        .insert(invoice)
+        .insert(invoice as InvoiceInsert)
         .select()
         .single();
 
@@ -86,7 +86,7 @@ export function useUpdateInvoice() {
     mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("invoices")
-        .update(invoice)
+        .update(invoice as InvoiceUpdate)
         .eq("id", id)
         .select()
         .single();

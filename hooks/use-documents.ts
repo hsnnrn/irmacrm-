@@ -71,7 +71,7 @@ export function useUploadDocument() {
       
       const { data, error } = await supabase
         .from("documents")
-        .insert(documentData)
+        .insert(documentData as DocumentInsert)
         .select()
         .single();
 
@@ -103,7 +103,7 @@ export function useVerifyDocument() {
       const updateData: DocumentUpdate = { is_verified: true };
       const { data, error } = await supabase
         .from("documents")
-        .update(updateData)
+        .update(updateData as DocumentUpdate)
         .eq("id", id)
         .select()
         .single();

@@ -44,7 +44,7 @@ export function useCreateCustomer() {
     mutationFn: async (customer: CustomerInsert) => {
       const { data, error } = await supabase
         .from("customers")
-        .insert(customer)
+        .insert(customer as CustomerInsert)
         .select()
         .single();
 
@@ -64,7 +64,7 @@ export function useUpdateCustomer() {
     mutationFn: async ({ id, ...customer }: CustomerUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("customers")
-        .update(customer)
+        .update(customer as CustomerUpdate)
         .eq("id", id)
         .select()
         .single();
