@@ -7,7 +7,27 @@ const supabaseUrl =
   "https://a4c25270-bb57-4bcc-bc65-7605e1c573ca.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    // Handle WebSocket connection errors gracefully
+    // This prevents console errors in production
+    log_level: process.env.NODE_ENV === "production" ? "error" : "info",
+  },
+  // Global fetch options for better compatibility
+  global: {
+    fetch: (url, options = {}) => {
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+        },
+      });
+    },
+  },
+});
 
 export type Tables<T extends keyof Database["public"]["Tables"]> =
   Database["public"]["Tables"][T]["Row"];
