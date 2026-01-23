@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import type { Tables } from "@/lib/supabase";
+import type { Tables, Inserts, Updates } from "@/lib/supabase";
 
 type Customer = Tables<"customers">;
+type CustomerInsert = Inserts<"customers">;
+type CustomerUpdate = Updates<"customers">;
 
 export function useCustomers() {
   return useQuery<Customer[]>({
@@ -39,7 +41,7 @@ export function useCreateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (customer: Partial<Customer>) => {
+    mutationFn: async (customer: CustomerInsert) => {
       const { data, error } = await supabase
         .from("customers")
         .insert(customer)
@@ -59,7 +61,7 @@ export function useUpdateCustomer() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...customer }: Partial<Customer> & { id: string }) => {
+    mutationFn: async ({ id, ...customer }: CustomerUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("customers")
         .update(customer)

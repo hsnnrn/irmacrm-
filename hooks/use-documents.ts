@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { uploadDocument, deleteDocument as deleteDocumentFile } from "@/lib/storage";
 import type { DocumentType } from "@/lib/position-utils";
+import type { Inserts, Updates } from "@/lib/supabase";
+
+type DocumentInsert = Inserts<"documents">;
+type DocumentUpdate = Updates<"documents">;
 
 interface Document {
   id: string;
@@ -56,16 +60,18 @@ export function useUploadDocument() {
       const userId = uploadedBy ?? user?.id ?? null;
 
       // Save document metadata to database
+      const documentData: DocumentInsert = {
+        position_id: positionId,
+        type,
+        file_url: uploadResult.url,
+        file_path: uploadResult.path,
+        uploaded_by: userId,
+        is_verified: false,
+      };
+      
       const { data, error } = await supabase
         .from("documents")
-        .insert({
-          position_id: positionId,
-          type,
-          file_url: uploadResult.url,
-          file_path: uploadResult.path,
-          uploaded_by: userId,
-          is_verified: false,
-        })
+        .insert(documentData)
         .select()
         .single();
 
@@ -94,9 +100,10 @@ export function useVerifyDocument() {
       id: string;
       positionId: string;
     }) => {
+      const updateData: DocumentUpdate = { is_verified: true };
       const { data, error } = await supabase
         .from("documents")
-        .update({ is_verified: true })
+        .update(updateData)
         .eq("id", id)
         .select()
         .single();

@@ -1,5 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import type { Inserts, Updates } from "@/lib/supabase";
+
+type InvoiceInsert = Inserts<"invoices">;
+type InvoiceUpdate = Updates<"invoices">;
 
 interface Invoice {
   id: string;
@@ -59,7 +63,7 @@ export function useCreateInvoice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (invoice: Partial<Invoice>) => {
+    mutationFn: async (invoice: InvoiceInsert) => {
       const { data, error } = await supabase
         .from("invoices")
         .insert(invoice)
@@ -79,7 +83,7 @@ export function useUpdateInvoice() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...invoice }: Partial<Invoice> & { id: string }) => {
+    mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("invoices")
         .update(invoice)
