@@ -81,6 +81,7 @@ export function useCreatePosition() {
 
   return useMutation<Position, Error, PositionInsert>({
     mutationFn: async (position: PositionInsert) => {
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("positions")
         .insert([position] as any)
@@ -101,6 +102,7 @@ export function useUpdatePosition() {
 
   return useMutation({
     mutationFn: async ({ id, ...position }: PositionUpdate & { id: string }) => {
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("positions")
         .update(position as any)

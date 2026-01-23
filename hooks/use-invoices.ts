@@ -64,6 +64,7 @@ export function useCreateInvoice() {
 
   return useMutation({
     mutationFn: async (invoice: InvoiceInsert) => {
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("invoices")
         .insert([invoice] as any)
@@ -84,6 +85,7 @@ export function useUpdateInvoice() {
 
   return useMutation({
     mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("invoices")
         .update(invoice as any)

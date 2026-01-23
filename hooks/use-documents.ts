@@ -69,6 +69,7 @@ export function useUploadDocument() {
         is_verified: false,
       };
       
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("documents")
         .insert([documentData] as any)
@@ -101,6 +102,7 @@ export function useVerifyDocument() {
       positionId: string;
     }) => {
       const updateData: DocumentUpdate = { is_verified: true };
+      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("documents")
         .update(updateData as any)
