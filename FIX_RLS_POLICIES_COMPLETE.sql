@@ -104,3 +104,16 @@ CREATE POLICY "Authenticated users can update route_stops" ON route_stops
 
 CREATE POLICY "Authenticated users can delete route_stops" ON route_stops
   FOR DELETE USING (auth.role() = 'authenticated');
+
+-- 9. Kontrol sorgusu - Politikaların doğru oluşturulduğunu kontrol et
+SELECT 
+  schemaname, 
+  tablename, 
+  policyname, 
+  permissive, 
+  roles, 
+  cmd, 
+  qual 
+FROM pg_policies 
+WHERE tablename IN ('positions', 'customers', 'suppliers', 'invoices', 'documents', 'route_stops')
+ORDER BY tablename, cmd;
