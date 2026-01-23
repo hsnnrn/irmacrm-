@@ -71,7 +71,7 @@ export function useUploadDocument() {
       
       const { data, error } = await supabase
         .from("documents")
-        .insert(documentData as DocumentInsert)
+        .insert([documentData] as DocumentInsert[])
         .select()
         .single();
 

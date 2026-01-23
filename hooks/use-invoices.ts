@@ -66,7 +66,7 @@ export function useCreateInvoice() {
     mutationFn: async (invoice: InvoiceInsert) => {
       const { data, error } = await supabase
         .from("invoices")
-        .insert(invoice as InvoiceInsert)
+        .insert([invoice] as InvoiceInsert[])
         .select()
         .single();
 

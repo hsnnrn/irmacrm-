@@ -44,7 +44,7 @@ export function useCreateSupplier() {
     mutationFn: async (supplier: SupplierInsert) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .insert(supplier as SupplierInsert)
+        .insert([supplier] as SupplierInsert[])
         .select()
         .single();
 
