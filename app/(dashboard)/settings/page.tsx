@@ -15,6 +15,7 @@ import { Settings, User, Bell, Shield, Database, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -61,7 +62,7 @@ export default function SettingsPage() {
     } catch (error: any) {
       toast({
         title: "Hata!",
-        description: error.message,
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     } finally {

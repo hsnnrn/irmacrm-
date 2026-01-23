@@ -24,6 +24,7 @@ import { SupplierDialog } from "@/components/business/supplier-dialog";
 import { formatDate } from "@/lib/utils";
 import { useSuppliers, useDeleteSupplier } from "@/hooks/use-suppliers";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 import { exportToExcel, formatDateForExport } from "@/lib/export-utils";
 import {
   AlertDialog,
@@ -97,7 +98,7 @@ export default function SuppliersPage() {
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "Tedarikçi silinirken bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

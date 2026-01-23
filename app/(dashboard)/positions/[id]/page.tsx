@@ -42,6 +42,7 @@ import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/ho
 import { useDocuments } from "@/hooks/use-documents";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 
 // All document types
 const allDocumentTypes: DocumentType[] = [
@@ -175,7 +176,7 @@ export default function PositionDetailPage({
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "Durum güncellenirken bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

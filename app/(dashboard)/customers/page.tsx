@@ -24,6 +24,7 @@ import { CustomerDialog } from "@/components/business/customer-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useCustomers, useDeleteCustomer } from "@/hooks/use-customers";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 import { exportToExcel, formatDateForExport, formatCurrencyForExport } from "@/lib/export-utils";
 import {
   AlertDialog,
@@ -104,7 +105,7 @@ export default function CustomersPage() {
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "Müşteri silinirken bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

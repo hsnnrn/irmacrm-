@@ -3,6 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { useToast } from "./use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -48,7 +49,7 @@ export function useAuth() {
     } catch (error: any) {
       toast({
         title: "Giriş hatası!",
-        description: error.message,
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
       throw error;
@@ -75,7 +76,7 @@ export function useAuth() {
     } catch (error: any) {
       toast({
         title: "Kayıt hatası!",
-        description: error.message,
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
       throw error;
@@ -96,7 +97,7 @@ export function useAuth() {
     } catch (error: any) {
       toast({
         title: "Çıkış hatası!",
-        description: error.message,
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

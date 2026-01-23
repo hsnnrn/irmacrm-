@@ -17,6 +17,7 @@ import { DOCUMENT_LABELS } from "@/lib/position-utils";
 import type { DocumentType } from "@/lib/position-utils";
 import { useUploadDocument } from "@/hooks/use-documents";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 
 interface DocumentUploadDialogProps {
   open: boolean;
@@ -58,10 +59,9 @@ export function DocumentUploadDialog({
       setFile(null);
       onOpenChange(false);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Belge yüklenirken bir hata oluştu.";
       toast({
         title: "Hata!",
-        description: message,
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

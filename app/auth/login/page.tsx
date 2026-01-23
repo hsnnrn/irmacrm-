@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { resetPassword } from "@/lib/auth";
+import { translateSupabaseError } from "@/lib/utils";
 import { Loader2, Eye, EyeOff, Mail, Lock, Truck, Shield, Zap, ArrowRight, Send } from "lucide-react";
 
 export default function LoginPage() {
@@ -104,7 +105,7 @@ export default function LoginPage() {
     } catch (error: any) {
       toast({
         title: "Hata!",
-        description: error.message || "Şifre sıfırlama e-postası gönderilemedi. Lütfen tekrar deneyin.",
+        description: translateSupabaseError(error) || "Şifre sıfırlama e-postası gönderilemedi. Lütfen tekrar deneyin.",
         variant: "destructive",
       });
     } finally {

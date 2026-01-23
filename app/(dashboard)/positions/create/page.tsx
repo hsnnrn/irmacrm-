@@ -22,6 +22,7 @@ import {
 import { Plus, X, ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 import { generateSupplierRefNo } from "@/lib/position-utils";
 import { useCustomers } from "@/hooks/use-customers";
 import { useSuppliers } from "@/hooks/use-suppliers";
@@ -174,7 +175,7 @@ export default function CreatePositionPage() {
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "Pozisyon oluşturulurken bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

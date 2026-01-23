@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { translateSupabaseError } from "./utils";
 
 const BUCKET_NAME = "documents";
 
@@ -35,7 +36,7 @@ export async function uploadDocument(
 
     if (error) {
       console.error("Upload error:", error);
-      throw new Error(error.message || "Supabase Storage yükleme hatası");
+      throw new Error(translateSupabaseError(error));
     }
 
     // Get public URL (or signed URL if bucket is private)
@@ -50,7 +51,7 @@ export async function uploadDocument(
   } catch (error) {
     console.error("Upload error:", error);
     if (error instanceof Error) throw error;
-    throw new Error("Belge yüklenirken bilinmeyen bir hata oluştu");
+    throw new Error(translateSupabaseError(error));
   }
 }
 

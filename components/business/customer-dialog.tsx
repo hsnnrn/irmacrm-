@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateCustomer, useUpdateCustomer } from "@/hooks/use-customers";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 interface CustomerDialogProps {
@@ -82,7 +83,7 @@ export function CustomerDialog({
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "İşlem sırasında bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }

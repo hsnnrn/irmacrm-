@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateSupplier, useUpdateSupplier } from "@/hooks/use-suppliers";
 import { useToast } from "@/hooks/use-toast";
+import { translateSupabaseError } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 interface SupplierDialogProps {
@@ -77,7 +78,7 @@ export function SupplierDialog({
     } catch (error) {
       toast({
         title: "Hata!",
-        description: "İşlem sırasında bir hata oluştu.",
+        description: translateSupabaseError(error),
         variant: "destructive",
       });
     }
