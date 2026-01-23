@@ -42,9 +42,9 @@ export function useCreateCustomer() {
 
   return useMutation({
     mutationFn: async (customer: CustomerInsert) => {
-      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("customers")
+        // @ts-ignore
         .insert([customer] as any)
         .select()
         .single();
@@ -63,9 +63,9 @@ export function useUpdateCustomer() {
 
   return useMutation({
     mutationFn: async ({ id, ...customer }: CustomerUpdate & { id: string }) => {
-      // @ts-expect-error - Supabase type inference issue with Database generic
       const { data, error } = await supabase
         .from("customers")
+        // @ts-ignore
         .update(customer as any)
         .eq("id", id)
         .select()
