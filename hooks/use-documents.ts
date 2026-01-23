@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { uploadDocument, deleteDocument as deleteDocumentFile } from "@/lib/storage";
 import type { DocumentType } from "@/lib/position-utils";
 import type { Inserts, Updates } from "@/lib/supabase";
+import type { Database } from "@/lib/database.types";
 
 type DocumentInsert = Inserts<"documents">;
 type DocumentUpdate = Updates<"documents">;
@@ -71,7 +72,7 @@ export function useUploadDocument() {
       
       const { data, error } = await supabase
         .from("documents")
-        .insert([documentData] as DocumentInsert[])
+        .insert([documentData] as Database["public"]["Tables"]["documents"]["Insert"][])
         .select()
         .single();
 
@@ -103,7 +104,7 @@ export function useVerifyDocument() {
       const updateData: DocumentUpdate = { is_verified: true };
       const { data, error } = await supabase
         .from("documents")
-        .update(updateData as DocumentUpdate)
+        .update(updateData as Database["public"]["Tables"]["documents"]["Update"])
         .eq("id", id)
         .select()
         .single();

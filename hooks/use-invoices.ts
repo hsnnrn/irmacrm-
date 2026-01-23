@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Inserts, Updates } from "@/lib/supabase";
+import type { Database } from "@/lib/database.types";
 
 type InvoiceInsert = Inserts<"invoices">;
 type InvoiceUpdate = Updates<"invoices">;
@@ -66,7 +67,7 @@ export function useCreateInvoice() {
     mutationFn: async (invoice: InvoiceInsert) => {
       const { data, error } = await supabase
         .from("invoices")
-        .insert([invoice] as InvoiceInsert[])
+        .insert([invoice] as Database["public"]["Tables"]["invoices"]["Insert"][])
         .select()
         .single();
 
@@ -86,7 +87,7 @@ export function useUpdateInvoice() {
     mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("invoices")
-        .update(invoice as InvoiceUpdate)
+        .update(invoice as Database["public"]["Tables"]["invoices"]["Update"])
         .eq("id", id)
         .select()
         .single();
