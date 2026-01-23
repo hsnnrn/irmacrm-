@@ -104,8 +104,7 @@ export function useUpdatePosition() {
     mutationFn: async ({ id, ...position }: PositionUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("positions")
-        // @ts-ignore - Supabase type inference issue with Database types
-        .update(position)
+        .update(position as Omit<PositionUpdate, "id">)
         .eq("id", id)
         .select()
         .single();

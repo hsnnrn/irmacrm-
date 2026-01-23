@@ -65,8 +65,7 @@ export function useUpdateCustomer() {
     mutationFn: async ({ id, ...customer }: CustomerUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("customers")
-        // @ts-ignore - Supabase type inference issue with Database types
-        .update(customer)
+        .update(customer as Omit<CustomerUpdate, "id">)
         .eq("id", id)
         .select()
         .single();
