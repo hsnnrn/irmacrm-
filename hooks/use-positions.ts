@@ -104,7 +104,8 @@ export function useUpdatePosition() {
     mutationFn: async ({ id, ...position }: PositionUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("positions")
-        .update(position as Omit<PositionUpdate, "id">)
+        // @ts-expect-error - Supabase type inference issue with Update types
+        .update(position)
         .eq("id", id)
         .select()
         .single();

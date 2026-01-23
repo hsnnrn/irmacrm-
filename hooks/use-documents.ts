@@ -108,7 +108,8 @@ export function useVerifyDocument() {
       const updateData: DocumentUpdate = { is_verified: true };
       const { data, error } = await supabase
         .from("documents")
-        .update(updateData as Omit<DocumentUpdate, "id">)
+        // @ts-expect-error - Supabase type inference issue with Update types
+        .update(updateData)
         .eq("id", id)
         .select()
         .single();

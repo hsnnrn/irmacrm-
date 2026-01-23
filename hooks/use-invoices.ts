@@ -87,7 +87,8 @@ export function useUpdateInvoice() {
     mutationFn: async ({ id, ...invoice }: InvoiceUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("invoices")
-        .update(invoice as Omit<InvoiceUpdate, "id">)
+        // @ts-expect-error - Supabase type inference issue with Update types
+        .update(invoice)
         .eq("id", id)
         .select()
         .single();

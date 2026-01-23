@@ -65,7 +65,8 @@ export function useUpdateSupplier() {
     mutationFn: async ({ id, ...supplier }: SupplierUpdate & { id: string }) => {
       const { data, error } = await supabase
         .from("suppliers")
-        .update(supplier as Omit<SupplierUpdate, "id">)
+        // @ts-expect-error - Supabase type inference issue with Update types
+        .update(supplier)
         .eq("id", id)
         .select()
         .single();
