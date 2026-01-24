@@ -14,54 +14,100 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Service role key RLS politikalarını bypass eder
 const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
+// RADİKAL ÇÖZÜM: Eğer hala 401 alıyorsak, doğrudan anon key kullan ve auth'u tamamen kapat
+const forceAnonKey = !supabaseServiceKey; // Service role yoksa anon key'i force et
+
 // DETAYLI LOG - Environment variable kontrolü
 console.log('=== SUPABASE CONFIG DEBUG ===');
-console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active + Auth bypassed)');
+console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active + FORCE Auth bypassed)');
 console.log('🔧 SUPABASE_SERVICE_ROLE_KEY exists:', !!supabaseServiceKey);
 console.log('🔧 NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!supabaseAnonKey);
 console.log('🌐 Supabase URL:', supabaseUrl);
 console.log('🔢 Service Role Key Length:', supabaseServiceKey?.length || 0);
 console.log('🔢 Anon Key Length:', supabaseAnonKey?.length || 0);
 console.log('⚠️  NODE_ENV:', process.env.NODE_ENV);
-console.log('🔐 Auth Bypass:', supabaseServiceKey ? 'Service Role Auth' : 'Manual Auth Bypass');
+console.log('🔐 Auth Mode:', supabaseServiceKey ? 'Service Role Auth' : 'FORCE Manual Auth Bypass');
+console.log('🎯 Force Anon Key:', forceAnonKey);
 
 if (!supabaseServiceKey) {
-  console.warn('⚠️  Service Role Key yok - Auth bypassed mode aktif');
-  console.warn('📝 RLS kapatıldıysa bu mod çalışacak');
+  console.warn('⚠️  SERVICE ROLE KEY YOK - RADİKAL AUTH BYPASS AKTİF!');
+  console.warn('📝 Bu mod RLS kapalıysa veya auth bypass gerektiriyorsa çalışır');
+  console.warn('🚨 401 alırsak alternatif auth yöntemini dener');
 } else {
-  console.log('✅ Service Role Key var - Full access mode');
+  console.log('✅ SERVICE ROLE KEY VAR - Full access mode');
 }
 console.log('=== END DEBUG ===');
 
+// RADİKAL AUTH BYPASS - Supabase client oluştur
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   realtime: {
     params: {
       eventsPerSecond: 10,
     },
     // Handle WebSocket connection errors gracefully
-    // This prevents console errors in production
     log_level: process.env.NODE_ENV === "production" ? "error" : "info",
   },
-  // AUTH'U BYPASS ET - Bu ayar auth gerektirmeyen istekler için
+  // AUTH'U TAMAMEN BYPASS ET
   auth: {
     autoRefreshToken: false,
     persistSession: false,
-    detectSessionInUrl: false
+    detectSessionInUrl: false,
+    flowType: 'implicit' // Auth flow'u implicit yap
   },
-  // Global fetch options for better compatibility
+  // RADİKAL FETCH OVERRIDE - Tüm auth gereksinimlerini bypass et
   global: {
-    fetch: (url, options = {}) => {
-      return fetch(url, {
+    fetch: async (url, options = {}) => {
+      // Eğer service role key varsa onu kullan, yoksa anon key ile auth bypass
+      const authKey = supabaseServiceKey || supabaseAnonKey;
+
+      const finalOptions = {
         ...options,
         headers: {
           ...options.headers,
-          // Service role key varsa Authorization header ekle
-          ...(supabaseServiceKey ? {
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-            'apikey': supabaseServiceKey
-          } : {})
+          'Content-Type': 'application/json',
+          'apikey': authKey,
+          // Authorization header'ı her zaman ekle
+          'Authorization': `Bearer ${authKey}`,
+          // Supabase specific headers
+          'X-Client-Info': 'supabase-js/2',
+          'Prefer': options.headers?.['Prefer'] || 'return=representation',
         },
-      });
+      };
+
+      // Debug için URL logla
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 Supabase Request:', url.toString());
+      }
+
+      try {
+        const response = await fetch(url, finalOptions);
+
+        // Eğer hala 401 alıyorsak, alternatif yöntem dene
+        if (response.status === 401 && forceAnonKey) {
+          console.warn('🚨 401 received, trying alternative auth method...');
+
+          // Alternatif: Sadece apikey header'ı kullan
+          const altOptions = {
+            ...finalOptions,
+            headers: {
+              ...finalOptions.headers,
+              'Authorization': undefined, // Authorization header'ı kaldır
+              'apikey': supabaseAnonKey,
+            }
+          };
+
+          const altResponse = await fetch(url, altOptions);
+          if (altResponse.ok) {
+            console.log('✅ Alternative auth method worked!');
+            return altResponse;
+          }
+        }
+
+        return response;
+      } catch (error) {
+        console.error('🚨 Supabase fetch error:', error);
+        throw error;
+      }
     },
   },
 });
