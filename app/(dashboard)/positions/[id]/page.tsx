@@ -58,13 +58,25 @@ const allDocumentTypes: DocumentType[] = [
 export default function PositionDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const { data: position, isLoading, error } = usePosition(params.id);
-  const { data: documentsData, refetch: refetchDocuments } = useDocuments(params.id);
-  const { data: invoicesData } = usePositionInvoices(params.id);
+
+  // Handle async params for Next.js 13+
+  const [positionId, setPositionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const getParams = async () => {
+      const resolvedParams = await params;
+      setPositionId(resolvedParams.id);
+    };
+    getParams();
+  }, [params]);
+
+  const { data: position, isLoading, error } = usePosition(positionId || "");
+  const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
+  const { data: invoicesData } = usePositionInvoices(positionId || "");
   const updatePosition = useUpdatePosition();
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -575,7 +587,7 @@ export default function PositionDetailPage({
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
         documentType={selectedDocType}
-        positionId={params.id}
+        positionId={positionId || ""}
         onSave={handleDocumentSave}
       />
 
