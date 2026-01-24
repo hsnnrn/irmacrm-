@@ -214,7 +214,7 @@ export default function SettingsPage() {
               <Checkbox
                 id="email-notifications"
                 checked={emailNotifications}
-                onCheckedChange={setEmailNotifications}
+                onCheckedChange={(checked) => setEmailNotifications(checked === true)}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -222,7 +222,7 @@ export default function SettingsPage() {
               <Checkbox
                 id="status-updates"
                 checked={statusUpdates}
-                onCheckedChange={setStatusUpdates}
+                onCheckedChange={(checked) => setStatusUpdates(checked === true)}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -230,7 +230,7 @@ export default function SettingsPage() {
               <Checkbox
                 id="document-reminders"
                 checked={documentReminders}
-                onCheckedChange={setDocumentReminders}
+                onCheckedChange={(checked) => setDocumentReminders(checked === true)}
               />
             </div>
             <Button onClick={handleUpdateNotifications} className="w-full">
