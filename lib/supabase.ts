@@ -16,19 +16,20 @@ const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
 // DETAYLI LOG - Environment variable kontrolü
 console.log('=== SUPABASE CONFIG DEBUG ===');
-console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active)');
+console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active + Auth bypassed)');
 console.log('🔧 SUPABASE_SERVICE_ROLE_KEY exists:', !!supabaseServiceKey);
 console.log('🔧 NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!supabaseAnonKey);
 console.log('🌐 Supabase URL:', supabaseUrl);
 console.log('🔢 Service Role Key Length:', supabaseServiceKey?.length || 0);
 console.log('🔢 Anon Key Length:', supabaseAnonKey?.length || 0);
 console.log('⚠️  NODE_ENV:', process.env.NODE_ENV);
+console.log('🔐 Auth Bypass:', supabaseServiceKey ? 'Service Role Auth' : 'Manual Auth Bypass');
 
 if (!supabaseServiceKey) {
-  console.error('🚨 SUPABASE_SERVICE_ROLE_KEY bulunamadı! Vercel Environment Variables kontrol edin:');
-  console.error('   - Name: SUPABASE_SERVICE_ROLE_KEY');
-  console.error('   - Environment: Production');
-  console.error('   - Value: Supabase Dashboard → Settings → API → service_role key');
+  console.warn('⚠️  Service Role Key yok - Auth bypassed mode aktif');
+  console.warn('📝 RLS kapatıldıysa bu mod çalışacak');
+} else {
+  console.log('✅ Service Role Key var - Full access mode');
 }
 console.log('=== END DEBUG ===');
 
@@ -41,6 +42,12 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     // This prevents console errors in production
     log_level: process.env.NODE_ENV === "production" ? "error" : "info",
   },
+  // AUTH'U BYPASS ET - Bu ayar auth gerektirmeyen istekler için
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+    detectSessionInUrl: false
+  },
   // Global fetch options for better compatibility
   global: {
     fetch: (url, options = {}) => {
@@ -48,6 +55,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
         ...options,
         headers: {
           ...options.headers,
+          // Service role key varsa Authorization header ekle
+          ...(supabaseServiceKey ? {
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'apikey': supabaseServiceKey
+          } : {})
         },
       });
     },
