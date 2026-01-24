@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Bell, User, TrendingUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,10 +96,14 @@ export function Header() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Hesabım</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>Profil</DropdownMenuItem>
-                <DropdownMenuItem>Ayarlar</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/settings" className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    Profil & Ayarlar
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   className="text-red-600 cursor-pointer"
                   onClick={() => signOut()}
                 >

@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Settings, User, Bell, Shield, Database, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Settings, User, Bell, Shield, Database, Loader2, Phone, MapPin, Building } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -21,13 +22,30 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [company, setCompany] = useState("");
+  const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState("Kontrol ediliyor...");
+
+  // Notification preferences
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [statusUpdates, setStatusUpdates] = useState(true);
+  const [documentReminders, setDocumentReminders] = useState(true);
+
+  // Password change
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     // Load user profile data
     if (user) {
-      setFullName(user.user_metadata?.full_name || user.email || "");
+      setFullName(user.user_metadata?.full_name || "");
+      setPhone(user.user_metadata?.phone || "");
+      setCompany(user.user_metadata?.company || "");
+      setLocation(user.user_metadata?.location || "");
     }
 
     // Check database status
@@ -50,7 +68,12 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullName }
+        data: {
+          full_name: fullName,
+          phone: phone,
+          company: company,
+          location: location
+        }
       });
 
       if (error) throw error;
@@ -69,6 +92,55 @@ export default function SettingsPage() {
       setLoading(false);
     }
   };
+
+  const handleChangePassword = async () => {
+    if (!user) return;
+
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Hata!",
+        description: "Yeni şifreler eşleşmiyor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Hata!",
+        description: "Yeni şifre en az 6 karakter olmalıdır.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) throw error;
+
+      // Clear password fields
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      toast({
+        title: "Başarılı!",
+        description: "Şifreniz güncellendi.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
   return (
     <div className="space-y-6">
       <div>
@@ -84,31 +156,58 @@ export default function SettingsPage() {
               <CardTitle>Profil Bilgileri</CardTitle>
             </div>
             <CardDescription>
-              Kullanıcı bilgilerinizi güncelleyin
+              Kişisel ve işletme bilgilerinizi yönetin
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Ad Soyad</Label>
-              <Input 
-                placeholder="İsminiz" 
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Ad Soyad</Label>
+                <Input
+                  placeholder="Ad Soyad"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefon</Label>
+                <Input
+                  type="tel"
+                  placeholder="+90 555 123 4567"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Şirket/Firma</Label>
+                <Input
+                  placeholder="Şirket adı"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Konum</Label>
+                <Input
+                  placeholder="İstanbul, Türkiye"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>E-posta</Label>
-              <Input 
-                type="email" 
-                value={user?.email || ""} 
+              <Input
+                type="email"
+                value={user?.email || ""}
                 disabled
-                className="bg-gray-100"
+                className="bg-gray-50"
               />
-              <p className="text-xs text-gray-500">E-posta değiştirilemez</p>
+              <p className="text-xs text-gray-500">E-posta adresi değiştirilemez</p>
             </div>
-            <Button onClick={handleUpdateProfile} disabled={loading}>
+            <Button onClick={handleUpdateProfile} disabled={loading} className="w-full">
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Güncelle
+              Profil Bilgilerini Güncelle
             </Button>
           </CardContent>
         </Card>
@@ -123,16 +222,34 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <Label>E-posta Bildirimleri</Label>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <div className="space-y-0.5">
+                <Label className="text-base">E-posta Bildirimleri</Label>
+                <p className="text-sm text-gray-500">Önemli güncellemeler için e-posta alın</p>
+              </div>
+              <Switch
+                checked={emailNotifications}
+                onCheckedChange={setEmailNotifications}
+              />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Durum Güncellemeleri</Label>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <div className="space-y-0.5">
+                <Label className="text-base">Durum Güncellemeleri</Label>
+                <p className="text-sm text-gray-500">Pozisyon durum değişiklikleri</p>
+              </div>
+              <Switch
+                checked={statusUpdates}
+                onCheckedChange={setStatusUpdates}
+              />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Belge Yükleme Hatırlatıcıları</Label>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <div className="space-y-0.5">
+                <Label className="text-base">Belge Hatırlatıcıları</Label>
+                <p className="text-sm text-gray-500">Eksik belgeler için hatırlatma</p>
+              </div>
+              <Switch
+                checked={documentReminders}
+                onCheckedChange={setDocumentReminders}
+              />
             </div>
           </CardContent>
         </Card>
@@ -143,18 +260,35 @@ export default function SettingsPage() {
               <Shield className="h-5 w-5" />
               <CardTitle>Güvenlik</CardTitle>
             </div>
-            <CardDescription>Hesap güvenliği ayarları</CardDescription>
+            <CardDescription>Hesap güvenliği ve şifre ayarları</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Mevcut Şifre</Label>
-              <Input type="password" />
+              <Label>Yeni Şifre</Label>
+              <Input
+                type="password"
+                placeholder="En az 6 karakter"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-              <Label>Yeni Şifre</Label>
-              <Input type="password" />
+              <Label>Yeni Şifre (Tekrar)</Label>
+              <Input
+                type="password"
+                placeholder="Şifreyi tekrar girin"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
             </div>
-            <Button>Şifre Değiştir</Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={passwordLoading || !newPassword || !confirmPassword}
+              className="w-full"
+            >
+              {passwordLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Şifre Değiştir
+            </Button>
           </CardContent>
         </Card>
 
