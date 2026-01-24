@@ -18,38 +18,24 @@ export default function ResetPasswordPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Supabase automatically handles password reset tokens from URL hash
-    // Wait for auth to initialize and check session
-    const checkSession = async () => {
-      // Give Supabase time to process the hash token from URL
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setCheckingSession(false);
-      
-      // If still no user after waiting, redirect to login
-      if (!authLoading && !user) {
-        toast({
-          title: "Geçersiz bağlantı",
-          description: "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş. Lütfen yeni bir bağlantı talep edin.",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          router.push("/auth/login");
-        }, 2000);
-      }
-    };
-
-    checkSession();
-  }, [user, authLoading, router, toast]);
+    // Check if user has a valid session (required for password reset)
+    if (!user) {
+      toast({
+        title: "Oturum gerekli",
+        description: "Şifre sıfırlama için oturum açmanız gerekiyor.",
+        variant: "destructive",
+      });
+      router.push("/auth/login");
+    }
+  }, [user, router, toast]);
 
   const validatePassword = (value: string) => {
     if (!value) {
@@ -128,25 +114,12 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (checkingSession || authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Oturum kontrol ediliyor...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">Geçersiz veya süresi dolmuş bağlantı</p>
-          <Button onClick={() => router.push("/auth/login")}>
-            Giriş sayfasına dön
-          </Button>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Yönlendiriliyor...</p>
         </div>
       </div>
     );
