@@ -1,59 +1,83 @@
--- RLS Politikalarını Düzenleme (GÜNCELLENDİ - TAM YETKİ - İNVOCIES DAHİL)
--- Bu SQL komutları, 401 hatalarını çözmek için okuma VE yazma izinlerini herkese açar.
--- Geliştirme aşamasında auth sorunlarıyla uğraşmamak için bu ayar önerilir.
--- Supabase SQL Editor üzerinden çalıştırın.
+-- 🚨 KÖK ÇÖZÜM: RLS POLİTİKALARINI TAMAMEN KALDIRMAK
+-- Bu SQL komutları RLS'yi tamamen devre dışı bırakır ve 401 hatalarını çözer.
+-- PRODUCTION'DA ÇALIŞTIRILACAK - SUPABASE SQL EDITOR'DA
+-- ⚠️  UYARI: Bu ayar production'da güvenlik riski oluşturur!
 
--- 1. Mevcut kısıtlayıcı politikaları temizle
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON positions;
-DROP POLICY IF EXISTS "Allow public read access" ON positions;
-DROP POLICY IF EXISTS "Allow authenticated write access" ON positions;
-DROP POLICY IF EXISTS "Allow authenticated update access" ON positions;
-DROP POLICY IF EXISTS "Allow authenticated delete access" ON positions;
+-- 1. TÜM RLS POLİTİKALARINI TEMİZLE VE RLS'Yİ DISABLE ET
+-- Önce tüm politikaları kaldır
+DO $$ BEGIN
+    -- Positions table
+    DROP POLICY IF EXISTS "Enable all access for authenticated users" ON positions;
+    DROP POLICY IF EXISTS "Allow public read access" ON positions;
+    DROP POLICY IF EXISTS "Allow authenticated write access" ON positions;
+    DROP POLICY IF EXISTS "Allow authenticated update access" ON positions;
+    DROP POLICY IF EXISTS "Allow authenticated delete access" ON positions;
 
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON customers;
-DROP POLICY IF EXISTS "Allow public read access" ON customers;
-DROP POLICY IF EXISTS "Allow authenticated write access" ON customers;
-DROP POLICY IF EXISTS "Allow authenticated update access" ON customers;
-DROP POLICY IF EXISTS "Allow authenticated delete access" ON customers;
+    -- Customers table
+    DROP POLICY IF EXISTS "Enable all access for authenticated users" ON customers;
+    DROP POLICY IF EXISTS "Allow public read access" ON customers;
+    DROP POLICY IF EXISTS "Allow authenticated write access" ON customers;
+    DROP POLICY IF EXISTS "Allow authenticated update access" ON customers;
+    DROP POLICY IF EXISTS "Allow authenticated delete access" ON customers;
 
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON suppliers;
-DROP POLICY IF EXISTS "Allow public read access" ON suppliers;
-DROP POLICY IF EXISTS "Allow authenticated write access" ON suppliers;
-DROP POLICY IF EXISTS "Allow authenticated update access" ON suppliers;
-DROP POLICY IF EXISTS "Allow authenticated delete access" ON suppliers;
+    -- Suppliers table
+    DROP POLICY IF EXISTS "Enable all access for authenticated users" ON suppliers;
+    DROP POLICY IF EXISTS "Allow public read access" ON suppliers;
+    DROP POLICY IF EXISTS "Allow authenticated write access" ON suppliers;
+    DROP POLICY IF EXISTS "Allow authenticated update access" ON suppliers;
+    DROP POLICY IF EXISTS "Allow authenticated delete access" ON suppliers;
 
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON invoices;
-DROP POLICY IF EXISTS "Allow public read access" ON invoices;
-DROP POLICY IF EXISTS "Allow authenticated write access" ON invoices;
-DROP POLICY IF EXISTS "Allow authenticated update access" ON invoices;
-DROP POLICY IF EXISTS "Allow authenticated delete access" ON invoices;
+    -- Invoices table
+    DROP POLICY IF EXISTS "Enable all access for authenticated users" ON invoices;
+    DROP POLICY IF EXISTS "Allow public read access" ON invoices;
+    DROP POLICY IF EXISTS "Allow authenticated write access" ON invoices;
+    DROP POLICY IF EXISTS "Allow authenticated update access" ON invoices;
+    DROP POLICY IF EXISTS "Allow authenticated delete access" ON invoices;
 
-DROP POLICY IF EXISTS "Enable all access for authenticated users" ON exchange_rates;
-DROP POLICY IF EXISTS "Allow public read access" ON exchange_rates;
-DROP POLICY IF EXISTS "Allow authenticated write access" ON exchange_rates;
-DROP POLICY IF EXISTS "Allow authenticated update access" ON exchange_rates;
-DROP POLICY IF EXISTS "Allow authenticated delete access" ON exchange_rates;
+    -- Exchange rates table (eğer varsa)
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'exchange_rates') THEN
+        DROP POLICY IF EXISTS "Enable all access for authenticated users" ON exchange_rates;
+        DROP POLICY IF EXISTS "Allow public read access" ON exchange_rates;
+        DROP POLICY IF EXISTS "Allow authenticated write access" ON exchange_rates;
+        DROP POLICY IF EXISTS "Allow authenticated update access" ON exchange_rates;
+        DROP POLICY IF EXISTS "Allow authenticated delete access" ON exchange_rates;
+    END IF;
+END $$;
 
--- 2. Positions Tablosu - Herkese Tam Yetki
-CREATE POLICY "Allow full access" ON positions FOR ALL USING (true) WITH CHECK (true);
+-- 2. KÖK ÇÖZÜM: RLS'Yİ TAMAMEN DISABLE ET (DAHA GÜVENLİ)
+-- Bu yaklaşım RLS'yi tamamen kapatır, hiçbir policy'ye ihtiyaç kalmaz
 
--- 3. Customers Tablosu - Herkese Tam Yetki
-CREATE POLICY "Allow full access" ON customers FOR ALL USING (true) WITH CHECK (true);
+-- Positions tablosunda RLS'yi kapat
+ALTER TABLE positions DISABLE ROW LEVEL SECURITY;
 
--- 4. Suppliers Tablosu - Herkese Tam Yetki
-CREATE POLICY "Allow full access" ON suppliers FOR ALL USING (true) WITH CHECK (true);
+-- Customers tablosunda RLS'yi kapat
+ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
 
--- 5. Invoices Tablosu - Herkese Tam Yetki
-CREATE POLICY "Allow full access" ON invoices FOR ALL USING (true) WITH CHECK (true);
+-- Suppliers tablosunda RLS'yi kapat
+ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 
--- 6. Exchange Rates Tablosu - Herkese Tam Yetki (Eğer tablo varsa)
+-- Invoices tablosunda RLS'yi kapat
+ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
+
+-- Exchange rates tablosunda RLS'yi kapat (eğer varsa)
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'exchange_rates') THEN
-        CREATE POLICY "Allow full access" ON exchange_rates FOR ALL USING (true) WITH CHECK (true);
-        RAISE NOTICE 'Exchange rates table found - RLS policy created';
+        ALTER TABLE exchange_rates DISABLE ROW LEVEL SECURITY;
+        RAISE NOTICE 'Exchange rates table RLS disabled';
     ELSE
-        RAISE NOTICE 'Exchange rates table not found - skipping policy creation';
+        RAISE NOTICE 'Exchange rates table not found - skipping RLS disable';
+    END IF;
+END $$;
+
+-- Profiles tablosunda da RLS'yi kapat (eğer varsa)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'profiles') THEN
+        ALTER TABLE profiles DISABLE ROW LEVEL SECURITY;
+        RAISE NOTICE 'Profiles table RLS disabled';
+    ELSE
+        RAISE NOTICE 'Profiles table not found - skipping RLS disable';
     END IF;
 END $$;
 

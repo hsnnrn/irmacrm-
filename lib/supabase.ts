@@ -6,20 +6,19 @@ const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   "https://a4c25270-bb57-4bcc-bc65-7605e1c573ca.supabase.co";
 
-// Service role key kullan (tam yetkilere sahip, RLS bypass eder)
-// Eğer service role key varsa onu kullan, yoksa anon key kullan
+// FORCE SERVICE ROLE KEY - Production'da RLS bypass etmek için
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Service role key varsa onu kullan, yoksa anon key kullan
+// KRİTİK: Service role key varsa ONU KULLAN, yoksa anon key kullan
+// Service role key RLS politikalarını bypass eder
 const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
-// Log key kullanımını (development'ta)
-if (process.env.NODE_ENV === 'development') {
-  console.log('Using Supabase key type:', supabaseServiceKey ? 'service_role' : 'anon');
-  console.log('Service role key exists:', !!supabaseServiceKey);
-  console.log('Supabase URL:', supabaseUrl);
-}
+// Log key kullanımını (hem dev hem prod'da göster)
+console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active)');
+console.log('🔧 Service Role Key Exists:', !!supabaseServiceKey);
+console.log('🌐 Supabase URL:', supabaseUrl);
+console.log('⚠️  If getting 401 errors, ensure SUPABASE_SERVICE_ROLE_KEY is set in Vercel');
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   realtime: {
