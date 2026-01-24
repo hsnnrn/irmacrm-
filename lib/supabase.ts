@@ -70,7 +70,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
           'Authorization': `Bearer ${authKey}`,
           // Supabase specific headers
           'X-Client-Info': 'supabase-js/2',
-          'Prefer': options.headers?.['Prefer'] || 'return=representation',
+          'Prefer': (options.headers as any)?.['Prefer'] || 'return=representation',
         },
       };
 
