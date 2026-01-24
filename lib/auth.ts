@@ -49,11 +49,12 @@ export async function getSession() {
 
 // Reset password
 export async function resetPassword(email: string) {
-  // Use environment variable for production URL, fallback to window.location.origin for development
-  const baseUrl = 
-    process.env.NEXT_PUBLIC_SITE_URL || 
+  // Always use the root domain for redirect URL
+  // This prevents issues with nested paths in the URL
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
     (typeof window !== "undefined" ? window.location.origin : "");
-  
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${baseUrl}/auth/reset-password`,
   });
