@@ -86,15 +86,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
         if (response.status === 401 && forceAnonKey) {
           console.warn('🚨 401 received, trying alternative auth method...');
 
-          // Alternatif: Sadece apikey header'ı kullan
+          // Alternatif: Sadece apikey header'ı kullan (Authorization olmadan)
           const altOptions = {
             ...finalOptions,
             headers: {
               ...finalOptions.headers,
-              'Authorization': undefined, // Authorization header'ı kaldır
+              // Authorization header'ı tamamen kaldır
               'apikey': supabaseAnonKey,
             }
           };
+          // Authorization header'ını explicit olarak kaldır
+          delete (altOptions.headers as any).Authorization;
 
           const altResponse = await fetch(url, altOptions);
           if (altResponse.ok) {
