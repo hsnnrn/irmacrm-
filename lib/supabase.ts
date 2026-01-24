@@ -14,11 +14,23 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // Service role key RLS politikalarını bypass eder
 const supabaseKey = supabaseServiceKey || supabaseAnonKey;
 
-// Log key kullanımını (hem dev hem prod'da göster)
+// DETAYLI LOG - Environment variable kontrolü
+console.log('=== SUPABASE CONFIG DEBUG ===');
 console.log('🔑 Supabase Key Type:', supabaseServiceKey ? 'SERVICE_ROLE (RLS bypassed)' : 'ANON_KEY (RLS active)');
-console.log('🔧 Service Role Key Exists:', !!supabaseServiceKey);
+console.log('🔧 SUPABASE_SERVICE_ROLE_KEY exists:', !!supabaseServiceKey);
+console.log('🔧 NEXT_PUBLIC_SUPABASE_ANON_KEY exists:', !!supabaseAnonKey);
 console.log('🌐 Supabase URL:', supabaseUrl);
-console.log('⚠️  If getting 401 errors, ensure SUPABASE_SERVICE_ROLE_KEY is set in Vercel');
+console.log('🔢 Service Role Key Length:', supabaseServiceKey?.length || 0);
+console.log('🔢 Anon Key Length:', supabaseAnonKey?.length || 0);
+console.log('⚠️  NODE_ENV:', process.env.NODE_ENV);
+
+if (!supabaseServiceKey) {
+  console.error('🚨 SUPABASE_SERVICE_ROLE_KEY bulunamadı! Vercel Environment Variables kontrol edin:');
+  console.error('   - Name: SUPABASE_SERVICE_ROLE_KEY');
+  console.error('   - Environment: Production');
+  console.error('   - Value: Supabase Dashboard → Settings → API → service_role key');
+}
+console.log('=== END DEBUG ===');
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   realtime: {
