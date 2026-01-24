@@ -11,8 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Settings, User, Bell, Shield, Database, Loader2, Phone, MapPin, Building } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Settings, User, Bell, Shield, Database, Loader2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -22,14 +22,10 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [company, setCompany] = useState("");
-  const [location, setLocation] = useState("");
   const [loading, setLoading] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState("Kontrol ediliyor...");
 
-  // Notification preferences
+  // Notification settings
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [statusUpdates, setStatusUpdates] = useState(true);
   const [documentReminders, setDocumentReminders] = useState(true);
@@ -38,19 +34,32 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     // Load user profile data
     if (user) {
-      setFullName(user.user_metadata?.full_name || "");
-      setPhone(user.user_metadata?.phone || "");
-      setCompany(user.user_metadata?.company || "");
-      setLocation(user.user_metadata?.location || "");
+      setFullName(user.user_metadata?.full_name || user.email || "");
     }
 
     // Check database status
     checkDatabaseStatus();
+
+    // Load notification preferences from localStorage
+    loadNotificationPreferences();
   }, [user]);
+
+  const loadNotificationPreferences = () => {
+    const emailNotifs = localStorage.getItem('emailNotifications') !== 'false';
+    const statusNotifs = localStorage.getItem('statusUpdates') !== 'false';
+    const docReminders = localStorage.getItem('documentReminders') !== 'false';
+
+    setEmailNotifications(emailNotifs);
+    setStatusUpdates(statusNotifs);
+    setDocumentReminders(docReminders);
+  };
 
   const checkDatabaseStatus = async () => {
     try {
@@ -68,12 +77,7 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        data: {
-          full_name: fullName,
-          phone: phone,
-          company: company,
-          location: location
-        }
+        data: { full_name: fullName }
       });
 
       if (error) throw error;
@@ -93,6 +97,17 @@ export default function SettingsPage() {
     }
   };
 
+  const handleUpdateNotifications = () => {
+    localStorage.setItem('emailNotifications', emailNotifications.toString());
+    localStorage.setItem('statusUpdates', statusUpdates.toString());
+    localStorage.setItem('documentReminders', documentReminders.toString());
+
+    toast({
+      title: "Başarılı!",
+      description: "Bildirim tercihleriniz güncellendi.",
+    });
+  };
+
   const handleChangePassword = async () => {
     if (!user) return;
 
@@ -108,13 +123,13 @@ export default function SettingsPage() {
     if (newPassword.length < 6) {
       toast({
         title: "Hata!",
-        description: "Yeni şifre en az 6 karakter olmalıdır.",
+        description: "Şifre en az 6 karakter olmalıdır.",
         variant: "destructive",
       });
       return;
     }
 
-    setPasswordLoading(true);
+    setChangingPassword(true);
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword
@@ -122,7 +137,7 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
-      // Clear password fields
+      // Clear form
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -138,7 +153,7 @@ export default function SettingsPage() {
         variant: "destructive",
       });
     } finally {
-      setPasswordLoading(false);
+      setChangingPassword(false);
     }
   };
   return (
@@ -156,58 +171,31 @@ export default function SettingsPage() {
               <CardTitle>Profil Bilgileri</CardTitle>
             </div>
             <CardDescription>
-              Kişisel ve işletme bilgilerinizi yönetin
+              Kullanıcı bilgilerinizi güncelleyin
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Ad Soyad</Label>
-                <Input
-                  placeholder="Ad Soyad"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Telefon</Label>
-                <Input
-                  type="tel"
-                  placeholder="+90 555 123 4567"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Şirket/Firma</Label>
-                <Input
-                  placeholder="Şirket adı"
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Konum</Label>
-                <Input
-                  placeholder="İstanbul, Türkiye"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Ad Soyad</Label>
+              <Input 
+                placeholder="İsminiz" 
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>E-posta</Label>
-              <Input
-                type="email"
-                value={user?.email || ""}
+              <Input 
+                type="email" 
+                value={user?.email || ""} 
                 disabled
-                className="bg-gray-50"
+                className="bg-gray-100"
               />
-              <p className="text-xs text-gray-500">E-posta adresi değiştirilemez</p>
+              <p className="text-xs text-gray-500">E-posta değiştirilemez</p>
             </div>
-            <Button onClick={handleUpdateProfile} disabled={loading} className="w-full">
+            <Button onClick={handleUpdateProfile} disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Profil Bilgilerini Güncelle
+              Güncelle
             </Button>
           </CardContent>
         </Card>
@@ -222,35 +210,32 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">E-posta Bildirimleri</Label>
-                <p className="text-sm text-gray-500">Önemli güncellemeler için e-posta alın</p>
-              </div>
-              <Switch
+              <Label htmlFor="email-notifications">E-posta Bildirimleri</Label>
+              <Checkbox
+                id="email-notifications"
                 checked={emailNotifications}
                 onCheckedChange={setEmailNotifications}
               />
             </div>
             <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Durum Güncellemeleri</Label>
-                <p className="text-sm text-gray-500">Pozisyon durum değişiklikleri</p>
-              </div>
-              <Switch
+              <Label htmlFor="status-updates">Durum Güncellemeleri</Label>
+              <Checkbox
+                id="status-updates"
                 checked={statusUpdates}
                 onCheckedChange={setStatusUpdates}
               />
             </div>
             <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Belge Hatırlatıcıları</Label>
-                <p className="text-sm text-gray-500">Eksik belgeler için hatırlatma</p>
-              </div>
-              <Switch
+              <Label htmlFor="document-reminders">Belge Yükleme Hatırlatıcıları</Label>
+              <Checkbox
+                id="document-reminders"
                 checked={documentReminders}
                 onCheckedChange={setDocumentReminders}
               />
             </div>
+            <Button onClick={handleUpdateNotifications} className="w-full">
+              Bildirim Tercihlerini Kaydet
+            </Button>
           </CardContent>
         </Card>
 
@@ -260,33 +245,77 @@ export default function SettingsPage() {
               <Shield className="h-5 w-5" />
               <CardTitle>Güvenlik</CardTitle>
             </div>
-            <CardDescription>Hesap güvenliği ve şifre ayarları</CardDescription>
+            <CardDescription>Hesap güvenliği ayarları</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Yeni Şifre</Label>
-              <Input
-                type="password"
-                placeholder="En az 6 karakter"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
+              <Label htmlFor="current-password">Mevcut Şifre</Label>
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Mevcut şifrenizi girin"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                >
+                  {showCurrentPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Yeni Şifre (Tekrar)</Label>
+              <Label htmlFor="new-password">Yeni Şifre</Label>
+              <div className="relative">
+                <Input
+                  id="new-password"
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Yeni şifrenizi girin (min. 6 karakter)"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Yeni Şifre (Tekrar)</Label>
               <Input
+                id="confirm-password"
                 type="password"
-                placeholder="Şifreyi tekrar girin"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Yeni şifrenizi tekrar girin"
               />
             </div>
             <Button
               onClick={handleChangePassword}
-              disabled={passwordLoading || !newPassword || !confirmPassword}
+              disabled={changingPassword || !newPassword || !confirmPassword}
               className="w-full"
             >
-              {passwordLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {changingPassword ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Şifre Değiştir
             </Button>
           </CardContent>

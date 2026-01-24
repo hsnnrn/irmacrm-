@@ -57,22 +57,21 @@ export default function ReportsPage() {
     },
   ];
 
-  // Calculate statistics and data availability
+  // Calculate statistics
   const stats = useMemo(() => {
     if (!positions || !invoices) {
       return {
         completedThisMonth: 0,
         avgDeliveryTime: 0,
         growth: 0,
-        hasEnoughData: false,
       };
     }
 
     const now = new Date();
     const thisMonth = positions.filter((p: any) => {
       const date = new Date(p.created_at);
-      return p.status === "COMPLETED" &&
-             date.getMonth() === now.getMonth() &&
+      return p.status === "COMPLETED" && 
+             date.getMonth() === now.getMonth() && 
              date.getFullYear() === now.getFullYear();
     });
 
@@ -80,7 +79,7 @@ export default function ReportsPage() {
     const deliveredPositions = positions.filter(
       (p: any) => p.status === "COMPLETED" && p.departure_date && p.delivery_date
     );
-
+    
     const totalDays = deliveredPositions.reduce((sum: number, p: any) => {
       const departure = new Date(p.departure_date);
       const delivery = new Date(p.delivery_date);
@@ -88,17 +87,14 @@ export default function ReportsPage() {
       return sum + days;
     }, 0);
 
-    const avgDeliveryTime = deliveredPositions.length > 0
-      ? (totalDays / deliveredPositions.length).toFixed(1)
+    const avgDeliveryTime = deliveredPositions.length > 0 
+      ? (totalDays / deliveredPositions.length).toFixed(1) 
       : 0;
-
-    const hasEnoughData = positions.length >= 5 && invoices.length >= 3;
 
     return {
       completedThisMonth: thisMonth.length,
       avgDeliveryTime,
       growth: 12, // This could be calculated by comparing to last month
-      hasEnoughData,
     };
   }, [positions, invoices]);
 
@@ -112,13 +108,31 @@ export default function ReportsPage() {
       return;
     }
 
-    // Check if there's enough data for meaningful reports
-    const hasEnoughData = positions.length >= 5 && invoices.length >= 3;
+    // Check if there's sufficient data for reports
+    const hasSufficientData = () => {
+      switch (reportType) {
+        case "monthly":
+          // Need at least some completed positions this month or overall
+          const completedPositions = positions.filter((p: any) => p.status === "COMPLETED");
+          return completedPositions.length > 0;
+        case "customer":
+          // Need positions with customer data
+          return positions.some((p: any) => p.customer_name);
+        case "supplier":
+          // Need positions with supplier data
+          return positions.some((p: any) => p.supplier_name);
+        case "operational":
+          // Need some positions data
+          return positions.length > 0;
+        default:
+          return false;
+      }
+    };
 
-    if (!hasEnoughData) {
+    if (!hasSufficientData()) {
       toast({
         title: "Yetersiz Veri!",
-        description: "Rapor oluşturmak için yeterli veri bulunmuyor. Daha fazla pozisyon ve fatura ekledikten sonra tekrar deneyin.",
+        description: "Rapor oluşturmak için yeterli veri bulunmuyor. Daha fazla işlem tamamlandıktan sonra tekrar deneyin.",
         variant: "destructive",
       });
       return;
@@ -181,16 +195,12 @@ export default function ReportsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <Button
+              <Button 
                 className="w-full"
                 onClick={() => handleDownloadReport(report.action)}
-                disabled={!stats.hasEnoughData && reportType !== "monthly"}
-                variant={!stats.hasEnoughData && reportType !== "monthly" ? "secondary" : "default"}
               >
                 <Download className="mr-2 h-4 w-4" />
-                {!stats.hasEnoughData && reportType !== "monthly"
-                  ? "Yetersiz Veri - Yakında"
-                  : "Rapor İndir (PDF)"}
+                Rapor İndir (PDF)
               </Button>
             </CardContent>
           </Card>

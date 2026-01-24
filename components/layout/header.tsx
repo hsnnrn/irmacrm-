@@ -96,12 +96,12 @@ export function Header() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Hesabım</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/settings" className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />
-                    Profil & Ayarlar
-                  </Link>
-                </DropdownMenuItem>
+                <Link href="/profile">
+                  <DropdownMenuItem>Profil</DropdownMenuItem>
+                </Link>
+                <Link href="/settings">
+                  <DropdownMenuItem>Ayarlar</DropdownMenuItem>
+                </Link>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-red-600 cursor-pointer"
