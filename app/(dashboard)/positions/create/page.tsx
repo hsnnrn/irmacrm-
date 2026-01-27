@@ -226,7 +226,7 @@ export default function CreatePositionPage() {
           {/* Main Form - Left Side */}
           <div className="space-y-6 lg:col-span-2 min-w-0">
             {/* Customer & Supplier */}
-            <Card className="overflow-hidden">
+            <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">Müşteri ve Tedarikçi Bilgileri</CardTitle>
                 <CardDescription className="text-sm">
@@ -260,7 +260,7 @@ export default function CreatePositionPage() {
                       />
                     )}
                   </div>
-                  <div className="space-y-2 min-w-0">
+                  <div className="space-y-2 min-w-0 w-full">
                     <Label htmlFor="supplier">Tedarikçi / Nakliyeci *</Label>
                     {suppliersLoading ? (
                       <div className="flex items-center justify-center h-10 border rounded-md">
@@ -290,16 +290,16 @@ export default function CreatePositionPage() {
             </Card>
 
             {/* Route Information */}
-            <Card className="overflow-hidden">
+            <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">Rota Bilgileri</CardTitle>
                 <CardDescription className="text-sm">
                   Yükleme ve boşaltma noktalarını belirleyin
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 overflow-visible">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full">
                     <CityAutocomplete
                       id="loading_point"
                       label="Yükleme Noktası *"
@@ -314,7 +314,7 @@ export default function CreatePositionPage() {
                       required
                     />
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full">
                     <CityAutocomplete
                       id="unloading_point"
                       label="Boşaltma Noktası *"
@@ -370,7 +370,7 @@ export default function CreatePositionPage() {
                             <SelectTrigger className="w-full">
                               <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent position="popper" className="z-[100]">
                               <SelectItem value="PICKUP">Alım</SelectItem>
                               <SelectItem value="DROP">Bırakım</SelectItem>
                               <SelectItem value="CUSTOMS">Gümrük</SelectItem>
@@ -395,7 +395,7 @@ export default function CreatePositionPage() {
             </Card>
 
             {/* Cargo Information */}
-            <Card className="overflow-hidden">
+            <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">Yük Bilgileri</CardTitle>
               </CardHeader>
@@ -421,14 +421,14 @@ export default function CreatePositionPage() {
 
           {/* Financial Information - Right Side */}
           <div className="space-y-6 lg:col-span-1 min-w-0">
-            <Card className="overflow-hidden">
+            <Card className="overflow-visible">
               <CardHeader>
                 <CardTitle className="text-lg sm:text-xl">Finansal Bilgiler</CardTitle>
                 <CardDescription className="text-sm">
                   Satış fiyatı ve maliyet bilgileri
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 overflow-visible">
                 {/* Sales Price */}
                 <div className="space-y-2">
                   <Label className="text-sm">Satış Fiyatı (Navlun)</Label>
@@ -457,7 +457,7 @@ export default function CreatePositionPage() {
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className="z-[100]">
                           <SelectItem value="TRY">TRY</SelectItem>
                           <SelectItem value="USD">USD</SelectItem>
                           <SelectItem value="EUR">EUR</SelectItem>
@@ -465,7 +465,7 @@ export default function CreatePositionPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="sm:col-span-4 min-w-0">
+                    <div className="sm:col-span-4 min-w-0 w-full">
                       <div className="relative">
                         <Input
                           type="number"
@@ -521,7 +521,7 @@ export default function CreatePositionPage() {
                         <SelectTrigger className="w-full">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent position="popper" className="z-[100]">
                           <SelectItem value="TRY">TRY</SelectItem>
                           <SelectItem value="USD">USD</SelectItem>
                           <SelectItem value="EUR">EUR</SelectItem>
@@ -529,7 +529,7 @@ export default function CreatePositionPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="sm:col-span-4 min-w-0">
+                    <div className="sm:col-span-4 min-w-0 w-full">
                       <div className="relative">
                         <Input
                           type="number"

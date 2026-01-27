@@ -105,9 +105,9 @@ export function CityAutocomplete({
   };
 
   return (
-    <div className="relative space-y-2" ref={wrapperRef}>
+    <div className="relative space-y-2 w-full" ref={wrapperRef}>
       <Label htmlFor={id}>{label}</Label>
-      <div className="relative">
+      <div className="relative w-full">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -126,7 +126,7 @@ export function CityAutocomplete({
           }}
           placeholder={placeholder}
           required={required}
-          className="pl-10 pr-10"
+          className="pl-10 pr-10 w-full"
           autoComplete="off"
         />
         {inputValue && (
@@ -142,7 +142,7 @@ export function CityAutocomplete({
 
       {/* Dropdown */}
       {isOpen && cities.length > 0 && (
-        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-xl ring-1 ring-black ring-opacity-5">
+        <div className="absolute z-[100] mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-xl ring-1 ring-black ring-opacity-5">
           <ul className="py-1">
             {cities.map((city) => (
               <li
@@ -168,7 +168,7 @@ export function CityAutocomplete({
       )}
       
       {isOpen && !isLoading && inputValue.length >= 2 && cities.length === 0 && (
-         <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 shadow-xl">
+         <div className="absolute z-[100] mt-1 w-full rounded-md border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 shadow-xl">
            Sonuç bulunamadı.
          </div>
       )}
