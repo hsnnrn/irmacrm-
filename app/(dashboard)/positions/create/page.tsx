@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +71,27 @@ export default function CreatePositionPage() {
     const rate = (exchangeRates as any)[currency]?.selling || 0;
     return rate;
   };
+
+  // Initialize exchange rates when exchangeRates data loads or currencies change
+  useEffect(() => {
+    if (!exchangeRates) return;
+    
+    // Update sales exchange rate if it's 0 or currency is EUR (default)
+    if (formData.sales_currency && formData.sales_currency !== "TRY") {
+      const rate = getExchangeRate(formData.sales_currency);
+      if (rate > 0 && (formData.sales_exchange_rate === 0 || formData.sales_currency === "EUR")) {
+        setFormData(prev => ({ ...prev, sales_exchange_rate: rate }));
+      }
+    }
+    
+    // Update cost exchange rate if it's 0 or currency is EUR (default)
+    if (formData.cost_currency && formData.cost_currency !== "TRY") {
+      const rate = getExchangeRate(formData.cost_currency);
+      if (rate > 0 && (formData.cost_exchange_rate === 0 || formData.cost_currency === "EUR")) {
+        setFormData(prev => ({ ...prev, cost_exchange_rate: rate }));
+      }
+    }
+  }, [exchangeRates, formData.sales_currency, formData.cost_currency]);
 
   // Update rates when currency changes
   const handleCurrencyChange = (type: "sales" | "cost", currency: string) => {
