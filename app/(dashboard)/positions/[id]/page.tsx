@@ -151,17 +151,24 @@ export default function PositionDetailPage({
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
 
-  // Initialize financial data when position loads or when editing is cancelled
+  // Initialize financial data when position loads
   useEffect(() => {
-    if (position && !isEditingFinancials) {
+    if (typedPosition && !isEditingFinancials) {
       setFinancialData({
-        sales_price: position.sales_price?.toString() || "",
-        sales_currency: position.sales_currency || "USD",
-        cost_price: position.cost_price?.toString() || "",
-        cost_currency: position.cost_currency || "USD",
+        sales_price: typedPosition.sales_price?.toString() || "",
+        sales_currency: typedPosition.sales_currency || "USD",
+        cost_price: typedPosition.cost_price?.toString() || "",
+        cost_currency: typedPosition.cost_currency || "USD",
       });
     }
-  }, [position?.id, isEditingFinancials]); // Re-run when position ID changes or editing is cancelled
+  }, [
+    typedPosition?.id,
+    typedPosition?.sales_price,
+    typedPosition?.sales_currency,
+    typedPosition?.cost_price,
+    typedPosition?.cost_currency,
+    isEditingFinancials,
+  ]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
