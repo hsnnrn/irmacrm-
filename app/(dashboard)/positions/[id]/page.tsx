@@ -29,6 +29,9 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
+  Edit,
+  Save,
+  X,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -55,6 +58,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // All document types
 const allDocumentTypes: DocumentType[] = [
@@ -102,6 +114,13 @@ export default function PositionDetailPage({
   const [expandedDocTypes, setExpandedDocTypes] = useState<Set<DocumentType>>(
     new Set()
   );
+  const [isEditingFinancials, setIsEditingFinancials] = useState(false);
+  const [financialData, setFinancialData] = useState({
+    sales_price: "",
+    sales_currency: "USD",
+    cost_price: "",
+    cost_currency: "USD",
+  });
 
   // Loading state
   if (isLoading) {
@@ -131,6 +150,18 @@ export default function PositionDetailPage({
 
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
+
+  // Initialize financial data when position loads
+  useEffect(() => {
+    if (typedPosition && !isEditingFinancials) {
+      setFinancialData({
+        sales_price: typedPosition.sales_price?.toString() || "",
+        sales_currency: typedPosition.sales_currency || "USD",
+        cost_price: typedPosition.cost_price?.toString() || "",
+        cost_currency: typedPosition.cost_currency || "USD",
+      });
+    }
+  }, [typedPosition, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
@@ -248,6 +279,56 @@ export default function PositionDetailPage({
       return newSet;
     });
   };
+
+  const handleSaveFinancials = async () => {
+    if (!positionId) return;
+
+    try {
+      const salesPrice = financialData.sales_price ? parseFloat(financialData.sales_price) : null;
+      const costPrice = financialData.cost_price ? parseFloat(financialData.cost_price) : null;
+      
+      // Calculate estimated profit
+      const estimatedProfit = salesPrice && costPrice ? salesPrice - costPrice : null;
+
+      await updatePosition.mutateAsync({
+        id: positionId,
+        sales_price: salesPrice,
+        sales_currency: financialData.sales_currency,
+        cost_price: costPrice,
+        cost_currency: financialData.cost_currency,
+        estimated_profit: estimatedProfit,
+        updated_at: new Date().toISOString(),
+      });
+
+      toast({
+        title: "Başarılı!",
+        description: "Finansal bilgiler güncellendi.",
+      });
+
+      setIsEditingFinancials(false);
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCancelEditFinancials = () => {
+    // Reset to original values
+    if (typedPosition) {
+      setFinancialData({
+        sales_price: typedPosition.sales_price?.toString() || "",
+        sales_currency: typedPosition.sales_currency || "USD",
+        cost_price: typedPosition.cost_price?.toString() || "",
+        cost_currency: typedPosition.cost_currency || "USD",
+      });
+    }
+    setIsEditingFinancials(false);
+  };
+
+  const isDraft = typedPosition?.status === "DRAFT";
 
   const handleStatusChange = async (newStatus: PositionStatus) => {
     try {
@@ -619,31 +700,122 @@ export default function PositionDetailPage({
 
         {/* Financials Tab */}
         <TabsContent value="financials" className="space-y-4">
+          {isDraft && (
+            <Card className="border-blue-200 bg-blue-50">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-5 w-5 text-blue-600" />
+                    <p className="text-sm text-blue-800">
+                      Pozisyon taslak durumunda. Finansal bilgileri düzenleyebilirsiniz.
+                    </p>
+                  </div>
+                  {!isEditingFinancials ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsEditingFinancials(true)}
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Düzenle
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCancelEditFinancials}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        İptal
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveFinancials}
+                        disabled={updatePosition.isPending}
+                      >
+                        {updatePosition.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Kaydet
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader>
                 <CardTitle>Satış (Navlun)</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-3xl font-bold">
-                      {formatCurrency(typedPosition.sales_price ?? 0, typedPosition.sales_currency)}
-                    </p>
-                    <p className="text-sm text-gray-500">Müşteriden</p>
-                  </div>
-                  {typedPosition.sales_currency !== "TRY" && (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "sales").toFixed(4)}</p>
-                      <p className="text-sm font-medium text-gray-700">
-                        {formatCurrency(
-                          (typedPosition.sales_price || 0) * getPositionExchangeRate(typedPosition, "sales"),
-                          "TRY"
-                        )}
-                      </p>
+                {isDraft && isEditingFinancials ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="sales_price">Satış Fiyatı</Label>
+                      <Input
+                        id="sales_price"
+                        type="number"
+                        step="0.01"
+                        value={financialData.sales_price}
+                        onChange={(e) =>
+                          setFinancialData((prev) => ({
+                            ...prev,
+                            sales_price: e.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                      />
                     </div>
-                  )}
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="sales_currency">Para Birimi</Label>
+                      <Select
+                        value={financialData.sales_currency}
+                        onValueChange={(value) =>
+                          setFinancialData((prev) => ({
+                            ...prev,
+                            sales_currency: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="sales_currency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TRY">TRY</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="RUB">RUB</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-3xl font-bold">
+                        {formatCurrency(typedPosition.sales_price ?? 0, typedPosition.sales_currency)}
+                      </p>
+                      <p className="text-sm text-gray-500">Müşteriden</p>
+                    </div>
+                    {typedPosition.sales_currency !== "TRY" && (
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "sales").toFixed(4)}</p>
+                        <p className="text-sm font-medium text-gray-700">
+                          {formatCurrency(
+                            (typedPosition.sales_price || 0) * getPositionExchangeRate(typedPosition, "sales"),
+                            "TRY"
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -652,25 +824,68 @@ export default function PositionDetailPage({
                 <CardTitle>Maliyet</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-3xl font-bold">
-                      {formatCurrency(typedPosition.cost_price ?? 0, typedPosition.cost_currency)}
-                    </p>
-                    <p className="text-sm text-gray-500">Tedarikçiye</p>
-                  </div>
-                  {typedPosition.cost_currency !== "TRY" && (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "cost").toFixed(4)}</p>
-                      <p className="text-sm font-medium text-gray-700">
-                        {formatCurrency(
-                          (typedPosition.cost_price || 0) * getPositionExchangeRate(typedPosition, "cost"),
-                          "TRY"
-                        )}
-                      </p>
+                {isDraft && isEditingFinancials ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cost_price">Maliyet Fiyatı</Label>
+                      <Input
+                        id="cost_price"
+                        type="number"
+                        step="0.01"
+                        value={financialData.cost_price}
+                        onChange={(e) =>
+                          setFinancialData((prev) => ({
+                            ...prev,
+                            cost_price: e.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                      />
                     </div>
-                  )}
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cost_currency">Para Birimi</Label>
+                      <Select
+                        value={financialData.cost_currency}
+                        onValueChange={(value) =>
+                          setFinancialData((prev) => ({
+                            ...prev,
+                            cost_currency: value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="cost_currency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="TRY">TRY</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="RUB">RUB</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-3xl font-bold">
+                        {formatCurrency(typedPosition.cost_price ?? 0, typedPosition.cost_currency)}
+                      </p>
+                      <p className="text-sm text-gray-500">Tedarikçiye</p>
+                    </div>
+                    {typedPosition.cost_currency !== "TRY" && (
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Kur: {getPositionExchangeRate(typedPosition, "cost").toFixed(4)}</p>
+                        <p className="text-sm font-medium text-gray-700">
+                          {formatCurrency(
+                            (typedPosition.cost_price || 0) * getPositionExchangeRate(typedPosition, "cost"),
+                            "TRY"
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -679,33 +894,46 @@ export default function PositionDetailPage({
                 <CardTitle className="text-green-800">Net Kar</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-3xl font-bold text-green-600">
-                      {formatCurrency(
-                        typedPosition.estimated_profit ?? 0,
-                        typedPosition.sales_currency
+                {(() => {
+                  const salesPrice = isDraft && isEditingFinancials
+                    ? (financialData.sales_price ? parseFloat(financialData.sales_price) : 0)
+                    : (typedPosition.sales_price ?? 0);
+                  const costPrice = isDraft && isEditingFinancials
+                    ? (financialData.cost_price ? parseFloat(financialData.cost_price) : 0)
+                    : (typedPosition.cost_price ?? 0);
+                  const salesCurrency = isDraft && isEditingFinancials
+                    ? financialData.sales_currency
+                    : typedPosition.sales_currency;
+                  const estimatedProfit = salesPrice - costPrice;
+                  const profitMargin = salesPrice !== 0 ? ((estimatedProfit / salesPrice) * 100) : 0;
+
+                  return (
+                    <div className="flex justify-between items-end">
+                      <div>
+                        <p className="text-3xl font-bold text-green-600">
+                          {formatCurrency(estimatedProfit, salesCurrency)}
+                        </p>
+                        <p className="text-sm text-green-700">
+                          {salesPrice !== 0
+                            ? `%${profitMargin.toFixed(1)} kar marjı`
+                            : "—"}
+                        </p>
+                      </div>
+                      {salesCurrency !== "TRY" && (
+                        <div className="text-right">
+                          <p className="text-xs text-green-700">TRY Karşılığı</p>
+                          <p className="text-sm font-bold text-green-700">
+                            {formatCurrency(
+                              salesPrice * getPositionExchangeRate(typedPosition, "sales") -
+                                costPrice * getPositionExchangeRate(typedPosition, "cost"),
+                              "TRY"
+                            )}
+                          </p>
+                        </div>
                       )}
-                    </p>
-                    <p className="text-sm text-green-700">
-                      {(typedPosition.sales_price && Number(typedPosition.sales_price) !== 0)
-                        ? `%${(((typedPosition.estimated_profit ?? 0) / Number(typedPosition.sales_price)) * 100).toFixed(1)} kar marjı`
-                        : "—"}
-                    </p>
-                  </div>
-                  {typedPosition.sales_currency !== "TRY" && (
-                    <div className="text-right">
-                      <p className="text-xs text-green-700">TRY Karşılığı</p>
-                      <p className="text-sm font-bold text-green-700">
-                        {formatCurrency(
-                          (typedPosition.sales_price || 0) * getPositionExchangeRate(typedPosition, "sales") -
-                            (typedPosition.cost_price || 0) * getPositionExchangeRate(typedPosition, "cost"),
-                          "TRY"
-                        )}
-                      </p>
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>
