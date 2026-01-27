@@ -51,7 +51,9 @@ import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/ho
 import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
+import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { translateSupabaseError } from "@/lib/utils";
+import { getExchangeRateSnapshot } from "@/lib/exchange-rates";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -126,6 +128,7 @@ export default function PositionDetailPage({
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
   const { data: invoicesData } = usePositionInvoices(positionId || "");
+  const { data: exchangeRates } = useExchangeRates();
   const updatePosition = useUpdatePosition();
   const deleteDocument = useDeleteDocument();
 
@@ -329,6 +332,16 @@ export default function PositionDetailPage({
 
   const isDraft = typedPosition?.status === "DRAFT";
 
+  // Get exchange rate for a currency
+  const getExchangeRate = (currency: string): number => {
+    if (currency === "TRY") return 1;
+    if (!exchangeRates) return 0;
+    
+    // Assuming exchangeRates has structure like { USD: { selling: 34.50 }, ... }
+    const rate = (exchangeRates as any)[currency]?.selling || 0;
+    return rate;
+  };
+
   const handleSaveFinancials = async () => {
     if (!positionId) return;
 
@@ -336,18 +349,40 @@ export default function PositionDetailPage({
       const salesPrice = financialData.sales_price ? parseFloat(financialData.sales_price) : null;
       const costPrice = financialData.cost_price ? parseFloat(financialData.cost_price) : null;
       
-      // Calculate estimated profit
-      const estimatedProfit = salesPrice && costPrice ? salesPrice - costPrice : null;
+      // Get exchange rates for sales and cost currencies
+      const salesExchangeRate = financialData.sales_currency === "TRY" 
+        ? 1 
+        : getExchangeRate(financialData.sales_currency);
+      const costExchangeRate = financialData.cost_currency === "TRY" 
+        ? 1 
+        : getExchangeRate(financialData.cost_currency);
+      
+      // Calculate estimated profit in TRY
+      const salesInTry = salesPrice ? salesPrice * salesExchangeRate : 0;
+      const costInTry = costPrice ? costPrice * costExchangeRate : 0;
+      const estimatedProfit = salesInTry - costInTry;
+
+      // Get exchange rates snapshot
+      const exchangeRatesSnapshot = await getExchangeRateSnapshot();
+      const fullSnapshot = {
+        ...exchangeRatesSnapshot,
+        sales_rate: salesExchangeRate,
+        cost_rate: costExchangeRate,
+        snapshot_date: new Date().toISOString(),
+      };
 
       await updatePosition.mutateAsync({
         id: positionId,
         sales_price: salesPrice,
         sales_currency: financialData.sales_currency,
+        sales_exchange_rate: salesExchangeRate,
         cost_price: costPrice,
         cost_currency: financialData.cost_currency,
+        cost_exchange_rate: costExchangeRate,
         estimated_profit: estimatedProfit,
+        exchange_rates_snapshot: fullSnapshot,
         updated_at: new Date().toISOString(),
-      });
+      } as any);
 
       toast({
         title: "Başarılı!",
