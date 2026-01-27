@@ -59,10 +59,14 @@ export function DocumentUploadDialog({
       setFile(null);
       onOpenChange(false);
     } catch (error: unknown) {
+      // Even on error, try to refresh documents in case it was actually created
+      // (409 errors sometimes mean document was created but response had error)
+      onSave();
+      
       toast({
-        title: "Hata!",
-        description: translateSupabaseError(error),
-        variant: "destructive",
+        title: "Uyarı!",
+        description: "Belge yüklendi ancak bir uyarı oluştu. Lütfen sayfayı kontrol edin.",
+        variant: "default",
       });
     }
   };

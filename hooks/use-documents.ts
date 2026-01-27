@@ -114,10 +114,16 @@ export function useUploadDocument() {
         .select()
         .single();
 
-      // If getting 409, it might mean document was created but response has error
-      // In this case, fetch the document and return it (it was successfully created)
-      if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409') || error.code === 'PGRST116')) {
-        console.log('Insert returned 409, checking if document was actually created...');
+      // If we have data, return it (success)
+      if (data) return data;
+
+      // If getting 409 or any error, check if document was actually created
+      // This handles the case where Supabase returns 409 but document was created
+      if (error) {
+        console.log('Insert returned error, checking if document was actually created...', error);
+        
+        // Wait a bit for database to sync (in case of eventual consistency)
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         // Fetch the document that might have been created
         const { data: existingDocAfterInsert, error: fetchError } = await supabase
@@ -125,58 +131,79 @@ export function useUploadDocument() {
           .select("*")
           .eq("position_id", positionId)
           .eq("type", type)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (existingDocAfterInsert && !fetchError) {
-          // Document was created! Return it even though we got 409
-          console.log('Document was created despite 409 error, returning it');
+          // Document was created! Return it even though we got error
+          console.log('✅ Document was created despite error, returning it:', existingDocAfterInsert);
           return existingDocAfterInsert as Document;
         }
 
-        // If document doesn't exist, try to update (in case of race condition)
-        console.log('Document not found, trying update approach...');
-        const { data: conflictDoc } = await supabase
-          .from("documents")
-          .select("id")
-          .eq("position_id", positionId)
-          .eq("type", type)
-          .maybeSingle();
-
-        const conflictDocTyped = conflictDoc as { id: string } | null;
-        if (conflictDocTyped?.id) {
-          // Update it
-          const updateResult = await supabase
+        // If document doesn't exist and we have a conflict error, try to update
+        if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409') || error.code === 'PGRST116') {
+          console.log('Document not found after insert error, trying update approach...');
+          const { data: conflictDoc } = await supabase
             .from("documents")
-            // @ts-expect-error - Supabase type inference issue
-            .update({
-              file_url: uploadResult.url,
-              file_path: uploadResult.path,
-              uploaded_by: userId,
-              is_verified: false,
-            })
-            .eq("id", conflictDocTyped.id)
-            .select()
-            .single();
-          
-          if (updateResult.error) throw updateResult.error;
-          return updateResult.data;
+            .select("id")
+            .eq("position_id", positionId)
+            .eq("type", type)
+            .maybeSingle();
+
+          const conflictDocTyped = conflictDoc as { id: string } | null;
+          if (conflictDocTyped?.id) {
+            // Update it
+            const updateResult = await supabase
+              .from("documents")
+              // @ts-expect-error - Supabase type inference issue
+              .update({
+                file_url: uploadResult.url,
+                file_path: uploadResult.path,
+                uploaded_by: userId,
+                is_verified: false,
+              })
+              .eq("id", conflictDocTyped.id)
+              .select()
+              .single();
+            
+            if (updateResult.error) {
+              console.error('Update also failed:', updateResult.error);
+              throw updateResult.error;
+            }
+            console.log('✅ Document updated successfully:', updateResult.data);
+            return updateResult.data;
+          }
         }
+
+        // If we couldn't recover, throw the original error
+        console.error('❌ Could not recover from insert error:', error);
+        throw error;
       }
-
-      // If we have data, return it (success)
-      if (data) return data;
-
-      // Only throw error if we don't have data and couldn't recover
-      if (error) throw error;
       
       throw new Error("Belge yüklenirken beklenmeyen bir hata oluştu");
     },
     onSuccess: (_, variables) => {
+      // Force refetch documents to ensure UI is updated
       queryClient.invalidateQueries({
         queryKey: ["documents", variables.positionId],
       });
       queryClient.invalidateQueries({
         queryKey: ["position", variables.positionId],
+      });
+      // Also refetch immediately
+      queryClient.refetchQueries({
+        queryKey: ["documents", variables.positionId],
+      });
+    },
+    onError: (error, variables) => {
+      // Even on error, try to refetch in case document was created
+      console.log('Mutation error, but refetching documents anyway:', error);
+      queryClient.invalidateQueries({
+        queryKey: ["documents", variables.positionId],
+      });
+      queryClient.refetchQueries({
+        queryKey: ["documents", variables.positionId],
       });
     },
   });
