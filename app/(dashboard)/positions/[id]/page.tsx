@@ -91,12 +91,23 @@ export default function PositionDetailPage({
   const [positionId, setPositionId] = useState<string | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     const getParams = async () => {
-      const resolvedParams = await params;
-      setPositionId(resolvedParams.id);
+      try {
+        const resolvedParams = await params;
+        if (isMounted) {
+          setPositionId(resolvedParams.id);
+        }
+      } catch (error) {
+        console.error("Error resolving params:", error);
+      }
     };
     getParams();
-  }, [params]);
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
@@ -153,15 +164,15 @@ export default function PositionDetailPage({
 
   // Initialize financial data when position loads
   useEffect(() => {
-    if (position && !isEditingFinancials) {
-      setFinancialData({
-        sales_price: position.sales_price?.toString() || "",
-        sales_currency: position.sales_currency || "USD",
-        cost_price: position.cost_price?.toString() || "",
-        cost_currency: position.cost_currency || "USD",
-      });
-    }
-  }, [position, isEditingFinancials]);
+    if (!position || isEditingFinancials) return;
+    
+    setFinancialData({
+      sales_price: position.sales_price?.toString() || "",
+      sales_currency: position.sales_currency || "USD",
+      cost_price: position.cost_price?.toString() || "",
+      cost_currency: position.cost_currency || "USD",
+    });
+  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
