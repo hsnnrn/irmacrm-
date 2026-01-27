@@ -56,26 +56,7 @@ export function useUploadDocument() {
       const { data: { user } } = await supabase.auth.getUser();
       const userId = uploadedBy ?? user?.id ?? null;
 
-      // Check if document already exists for this position and type
-      const { data: existingDoc } = await supabase
-        .from("documents")
-        .select("id, file_path")
-        .eq("position_id", positionId)
-        .eq("type", type)
-        .maybeSingle();
-
-      // If document exists, delete old file from storage first
-      const existingDocTyped = existingDoc as { id: string; file_path: string | null } | null;
-      if (existingDocTyped && existingDocTyped.file_path) {
-        try {
-          await deleteDocumentFile(existingDocTyped.file_path);
-        } catch (error) {
-          console.warn("Failed to delete old document file:", error);
-          // Continue anyway - we'll upload new file
-        }
-      }
-
-      // Upload file to Supabase Storage
+      // Upload file to Supabase Storage first
       const uploadResult = await uploadDocument(file, positionId, type);
       
       if (!uploadResult) {
@@ -92,72 +73,42 @@ export function useUploadDocument() {
         is_verified: false,
       };
 
-      let data, error;
-      
-      // If document exists, update it; otherwise try insert
-      if (existingDocTyped && existingDocTyped.id) {
-        // Update existing document
-        const updateResult = await supabase
-          .from("documents")
-          // @ts-expect-error - Supabase type inference issue with Update types
-          .update({
-            file_url: uploadResult.url,
-            file_path: uploadResult.path,
-            uploaded_by: userId,
-            is_verified: false,
-          })
-          .eq("id", existingDocTyped.id)
-          .select()
-          .single();
-        
-        data = updateResult.data;
-        error = updateResult.error;
-      } else {
-        // Try to insert new document
-        const insertResult = await supabase
-          .from("documents")
-          // @ts-ignore - Supabase type inference issue with Database types
-          .insert([documentData])
-          .select()
-          .single();
-        
-        data = insertResult.data;
-        error = insertResult.error;
+      // Strategy: Delete existing document first, then insert new one
+      // This avoids 409 conflicts completely
+      const { data: existingDocs } = await supabase
+        .from("documents")
+        .select("id, file_path")
+        .eq("position_id", positionId)
+        .eq("type", type);
 
-        // If insert fails with 409 (conflict), it means document was created between our check and insert
-        // In this case, fetch the existing document and update it
-        if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409'))) {
-          console.log('Insert conflict detected, fetching existing document and updating...');
-          
-          // Fetch the existing document
-          const { data: conflictDoc } = await supabase
-            .from("documents")
-            .select("id")
-            .eq("position_id", positionId)
-            .eq("type", type)
-            .maybeSingle();
-
-          const conflictDocTyped = conflictDoc as { id: string } | null;
-          if (conflictDocTyped?.id) {
-            // Update the existing document
-            const updateResult = await supabase
-              .from("documents")
-              // @ts-expect-error - Supabase type inference issue with Update types
-              .update({
-                file_url: uploadResult.url,
-                file_path: uploadResult.path,
-                uploaded_by: userId,
-                is_verified: false,
-              })
-              .eq("id", conflictDocTyped.id)
-              .select()
-              .single();
-            
-            data = updateResult.data;
-            error = updateResult.error;
+      // Delete existing documents and their files
+      const existingDocsTyped = (existingDocs || []) as Array<{ id: string; file_path: string | null }>;
+      if (existingDocsTyped.length > 0) {
+        for (const doc of existingDocsTyped) {
+          // Delete old file from storage
+          if (doc.file_path) {
+            try {
+              await deleteDocumentFile(doc.file_path);
+            } catch (error) {
+              console.warn("Failed to delete old document file:", error);
+            }
           }
+          
+          // Delete from database
+          await supabase
+            .from("documents")
+            .delete()
+            .eq("id", doc.id);
         }
       }
+
+      // Now insert the new document (no conflict possible)
+      const { data, error } = await supabase
+        .from("documents")
+        // @ts-ignore - Supabase type inference issue with Database types
+        .insert([documentData])
+        .select()
+        .single();
 
       if (error) throw error;
       return data;
