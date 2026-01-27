@@ -91,18 +91,12 @@ export default function PositionDetailPage({
   const [positionId, setPositionId] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
     const getParams = async () => {
       const resolvedParams = await params;
-      if (isMounted) {
-        setPositionId(resolvedParams.id);
-      }
+      setPositionId(resolvedParams.id);
     };
     getParams();
-    return () => {
-      isMounted = false;
-    };
-  }, []); // Empty dependency array - params is stable
+  }, [params]);
 
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
@@ -159,22 +153,15 @@ export default function PositionDetailPage({
 
   // Initialize financial data when position loads
   useEffect(() => {
-    if (!position || isEditingFinancials) return;
-    
-    setFinancialData({
-      sales_price: position.sales_price?.toString() || "",
-      sales_currency: position.sales_currency || "USD",
-      cost_price: position.cost_price?.toString() || "",
-      cost_currency: position.cost_currency || "USD",
-    });
-  }, [
-    position?.id,
-    position?.sales_price,
-    position?.sales_currency,
-    position?.cost_price,
-    position?.cost_currency,
-    isEditingFinancials,
-  ]);
+    if (position && !isEditingFinancials) {
+      setFinancialData({
+        sales_price: position.sales_price?.toString() || "",
+        sales_currency: position.sales_currency || "USD",
+        cost_price: position.cost_price?.toString() || "",
+        cost_currency: position.cost_currency || "USD",
+      });
+    }
+  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
