@@ -114,12 +114,27 @@ export function useUploadDocument() {
         .select()
         .single();
 
-      // If still getting 409, it means another request created it between delete and insert
-      // In this case, update it
-      if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409'))) {
-        console.log('Insert conflict after delete, updating existing document...');
+      // If getting 409, it might mean document was created but response has error
+      // In this case, fetch the document and return it (it was successfully created)
+      if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409') || error.code === 'PGRST116')) {
+        console.log('Insert returned 409, checking if document was actually created...');
         
-        // Fetch the document that was created
+        // Fetch the document that might have been created
+        const { data: existingDocAfterInsert, error: fetchError } = await supabase
+          .from("documents")
+          .select("*")
+          .eq("position_id", positionId)
+          .eq("type", type)
+          .maybeSingle();
+
+        if (existingDocAfterInsert && !fetchError) {
+          // Document was created! Return it even though we got 409
+          console.log('Document was created despite 409 error, returning it');
+          return existingDocAfterInsert as Document;
+        }
+
+        // If document doesn't exist, try to update (in case of race condition)
+        console.log('Document not found, trying update approach...');
         const { data: conflictDoc } = await supabase
           .from("documents")
           .select("id")
@@ -148,8 +163,13 @@ export function useUploadDocument() {
         }
       }
 
+      // If we have data, return it (success)
+      if (data) return data;
+
+      // Only throw error if we don't have data and couldn't recover
       if (error) throw error;
-      return data;
+      
+      throw new Error("Belge yüklenirken beklenmeyen bir hata oluştu");
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
