@@ -26,6 +26,9 @@ import {
   MoreVertical,
   Trash2,
   Printer,
+  Plus,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -99,6 +102,9 @@ export default function PositionDetailPage({
     fileUrl: string;
     filePath: string | null;
   } | null>(null);
+  const [expandedDocTypes, setExpandedDocTypes] = useState<Set<DocumentType>>(
+    new Set()
+  );
 
   // Loading state
   if (isLoading) {
@@ -140,13 +146,14 @@ export default function PositionDetailPage({
     }
     documentsByType.get(type)!.push(doc);
   });
-
+  
   const documents = allDocumentTypes.map((type) => {
     const docs = documentsByType.get(type) || [];
     return {
       type,
       uploaded: docs.length > 0,
       documents: docs, // Array of documents for this type
+      primaryDocument: docs[0] || null, // First document as primary
     };
   });
 
@@ -224,6 +231,23 @@ export default function PositionDetailPage({
         printWindow.print();
       };
     }
+  };
+
+  const handleAddAdditionalDocument = (docType: DocumentType) => {
+    setSelectedDocType(docType);
+    setUploadDialogOpen(true);
+  };
+
+  const toggleExpandedDocuments = (docType: DocumentType) => {
+    setExpandedDocTypes((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(docType)) {
+        newSet.delete(docType);
+      } else {
+        newSet.add(docType);
+      }
+      return newSet;
+    });
   };
 
   const handleStatusChange = async (newStatus: PositionStatus) => {
@@ -441,23 +465,103 @@ export default function PositionDetailPage({
               <div className="space-y-4">
                 {documents.map((docGroup) => (
                   <div key={docGroup.type} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      {docGroup.uploaded ? (
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <FileText className="h-5 w-5 text-gray-400" />
-                      )}
-                      <h3 className="font-semibold text-lg">{DOCUMENT_LABELS[docGroup.type]}</h3>
-                      {docGroup.uploaded && (
-                        <Badge variant="outline" className="ml-2">
-                          {docGroup.documents.length} adet
-                        </Badge>
-                      )}
+                    <div className="flex items-center justify-between rounded-lg border p-4 bg-white">
+                      <div className="flex items-center gap-3 flex-1">
+                        {docGroup.uploaded ? (
+                          <CheckCircle className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <FileText className="h-5 w-5 text-gray-400" />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{DOCUMENT_LABELS[docGroup.type]}</p>
+                            {docGroup.documents.length > 1 && (
+                              <Badge variant="outline" className="ml-2">
+                                {docGroup.documents.length} adet
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {docGroup.uploaded
+                              ? docGroup.primaryDocument?.created_at
+                                ? `Yüklendi - ${formatDate(docGroup.primaryDocument.created_at)}`
+                                : "Yüklendi"
+                              : "Yüklenmedi"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {docGroup.uploaded ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleViewDocument(docGroup.primaryDocument)}
+                            >
+                              <Eye className="mr-2 h-3 w-3" />
+                              Görüntüle
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handlePrintDocument(docGroup.primaryDocument)}>
+                                  <Printer className="mr-2 h-4 w-4" />
+                                  Yazdır
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleAddAdditionalDocument(docGroup.type)}
+                                >
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Ek Evrak Ekle
+                                </DropdownMenuItem>
+                                {docGroup.documents.length > 1 && (
+                                  <DropdownMenuItem
+                                    onClick={() => toggleExpandedDocuments(docGroup.type)}
+                                  >
+                                    {expandedDocTypes.has(docGroup.type) ? (
+                                      <>
+                                        <ChevronUp className="mr-2 h-4 w-4" />
+                                        Ek Evrakları Gizle
+                                      </>
+                                    ) : (
+                                      <>
+                                        <ChevronDown className="mr-2 h-4 w-4" />
+                                        Ek Evrakları Göster
+                                      </>
+                                    )}
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteDocument(docGroup.primaryDocument)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Sil
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDocumentUpload(docGroup.type)}
+                          >
+                            <Upload className="mr-2 h-3 w-3" />
+                            Yükle
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     
-                    {docGroup.uploaded ? (
-                      <div className="space-y-2 pl-7">
-                        {docGroup.documents.map((doc: any, index: number) => (
+                    {/* Ek Evraklar Listesi */}
+                    {docGroup.uploaded && docGroup.documents.length > 1 && expandedDocTypes.has(docGroup.type) && (
+                      <div className="ml-8 space-y-2">
+                        {docGroup.documents.slice(1).map((doc: any, index: number) => (
                           <div
                             key={doc.id}
                             className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3"
@@ -466,7 +570,7 @@ export default function PositionDetailPage({
                               <FileText className="h-4 w-4 text-green-600" />
                               <div>
                                 <p className="text-sm font-medium">
-                                  {DOCUMENT_LABELS[docGroup.type]} #{index + 1}
+                                  {DOCUMENT_LABELS[docGroup.type]} #{index + 2}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {doc.created_at ? formatDate(doc.created_at) : "Yüklendi"}
@@ -505,26 +609,6 @@ export default function PositionDetailPage({
                             </div>
                           </div>
                         ))}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDocumentUpload(docGroup.type)}
-                          className="ml-7"
-                        >
-                          <Upload className="mr-2 h-3 w-3" />
-                          Yeni {DOCUMENT_LABELS[docGroup.type]} Ekle
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="pl-7">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDocumentUpload(docGroup.type)}
-                        >
-                          <Upload className="mr-2 h-3 w-3" />
-                          Yükle
-                        </Button>
                       </div>
                     )}
                   </div>
