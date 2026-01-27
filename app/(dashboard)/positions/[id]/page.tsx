@@ -176,37 +176,18 @@ export default function PositionDetailPage({
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
 
-  // Initialize financial data when position loads - only when not editing
-  // Use positionId as the main dependency to avoid object reference issues
-  useEffect(() => {
-    if (!position || !positionId || isEditingFinancials) return;
-    
-    // Extract values directly from position to avoid stale closures
-    const newSalesPrice = position.sales_price?.toString() || "";
-    const newCostPrice = position.cost_price?.toString() || "";
-    const newSalesCurrency = position.sales_currency || "USD";
-    const newCostCurrency = position.cost_currency || "USD";
-    
-    setFinancialData((prev) => {
-      // Only update if values changed to prevent infinite loops
-      if (
-        prev.sales_price === newSalesPrice &&
-        prev.cost_price === newCostPrice &&
-        prev.sales_currency === newSalesCurrency &&
-        prev.cost_currency === newCostCurrency
-      ) {
-        return prev;
-      }
-      
-      return {
-        sales_price: newSalesPrice,
-        sales_currency: newSalesCurrency,
-        cost_price: newCostPrice,
-        cost_currency: newCostCurrency,
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positionId, isEditingFinancials]);
+  // Initialize financial data when entering edit mode
+  const handleStartEditFinancials = () => {
+    if (typedPosition) {
+      setFinancialData({
+        sales_price: typedPosition.sales_price?.toString() || "",
+        sales_currency: typedPosition.sales_currency || "USD",
+        cost_price: typedPosition.cost_price?.toString() || "",
+        cost_currency: typedPosition.cost_currency || "USD",
+      });
+    }
+    setIsEditingFinancials(true);
+  };
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
@@ -759,7 +740,7 @@ export default function PositionDetailPage({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setIsEditingFinancials(true)}
+                      onClick={handleStartEditFinancials}
                     >
                       <Edit className="mr-2 h-4 w-4" />
                       Düzenle
