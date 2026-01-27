@@ -78,38 +78,7 @@ export function useUploadDocument() {
         throw new Error("Belge yüklenirken bir hata oluştu");
       }
 
-      // Get existing document to delete old file if exists
-      const { data: existingDoc } = await supabase
-        .from("documents")
-        .select("id, file_path")
-        .eq("position_id", positionId)
-        .eq("type", type)
-        .maybeSingle();
-
-      const existingDocTyped = existingDoc as { id: string; file_path: string | null } | null;
-
-      // Delete old file from storage if exists
-      if (existingDocTyped?.file_path) {
-        try {
-          await deleteDocumentFile(existingDocTyped.file_path);
-        } catch (error) {
-          console.warn("Failed to delete old document file:", error);
-          // Continue anyway
-        }
-      }
-
-      // Delete existing document from database FIRST (await to ensure it completes)
-      if (existingDocTyped?.id) {
-        const { error: deleteError } = await supabase
-          .from("documents")
-          .delete()
-          .eq("id", existingDocTyped.id);
-        
-        if (deleteError) {
-          console.warn("Failed to delete existing document:", deleteError);
-          // Continue anyway - we'll try insert/update
-        }
-      }
+      // Note: We no longer delete existing documents - multiple documents per type are now supported
 
       // Prepare document data
       const documentData: DocumentInsert = {

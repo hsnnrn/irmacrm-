@@ -129,17 +129,24 @@ export default function PositionDetailPage({
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
 
-  // Process documents data
+  // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
-  const documentsMap = new Map(
-    (documentsData || []).map((d: any) => [d.type, d])
-  );
+  // Group documents by type - each type can have multiple documents
+  const documentsByType = new Map<DocumentType, any[]>();
+  (documentsData || []).forEach((doc: any) => {
+    const type = doc.type as DocumentType;
+    if (!documentsByType.has(type)) {
+      documentsByType.set(type, []);
+    }
+    documentsByType.get(type)!.push(doc);
+  });
+
   const documents = allDocumentTypes.map((type) => {
-    const docData = documentsMap.get(type);
+    const docs = documentsByType.get(type) || [];
     return {
       type,
-      uploaded: uploadedDocTypes.includes(type),
-      document: docData || null,
+      uploaded: docs.length > 0,
+      documents: docs, // Array of documents for this type
     };
   });
 
@@ -171,22 +178,19 @@ export default function PositionDetailPage({
     refetchDocuments();
   };
 
-  const handleViewDocument = (docType: DocumentType) => {
-    const doc = documentsMap.get(docType);
-    if (doc) {
-      setSelectedDocType(docType);
-      setSelectedDocument({
-        fileUrl: doc.file_url,
-        filePath: doc.file_path || null,
-      });
-      setViewDialogOpen(true);
-    }
+  const handleViewDocument = (doc: any) => {
+    setSelectedDocType(doc.type as DocumentType);
+    setSelectedDocument({
+      fileUrl: doc.file_url,
+      filePath: doc.file_path || null,
+    });
+    setViewDialogOpen(true);
   };
 
-  const handleDeleteDocument = async (docType: DocumentType) => {
-    const doc = documentsMap.get(docType);
+  const handleDeleteDocument = async (doc: any) => {
     if (!doc || !doc.file_path) return;
 
+    const docType = doc.type as DocumentType;
     if (!confirm(`${DOCUMENT_LABELS[docType]} belgesini silmek istediğinize emin misiniz?`)) {
       return;
     }
@@ -211,8 +215,7 @@ export default function PositionDetailPage({
     }
   };
 
-  const handlePrintDocument = (docType: DocumentType) => {
-    const doc = documentsMap.get(docType);
+  const handlePrintDocument = (doc: any) => {
     if (!doc) return;
 
     const printWindow = window.open(doc.file_url, "_blank");
@@ -435,76 +438,95 @@ export default function PositionDetailPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-3 md:grid-cols-2">
-                {documents.map((doc) => (
-                  <div
-                    key={doc.type}
-                    className={`flex items-center justify-between rounded-lg border p-4 ${
-                      doc.uploaded
-                        ? "border-green-300 bg-green-50"
-                        : "border-gray-300 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {doc.uploaded ? (
+              <div className="space-y-4">
+                {documents.map((docGroup) => (
+                  <div key={docGroup.type} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {docGroup.uploaded ? (
                         <CheckCircle className="h-5 w-5 text-green-600" />
                       ) : (
                         <FileText className="h-5 w-5 text-gray-400" />
                       )}
-                      <div>
-                        <p className="font-medium">{DOCUMENT_LABELS[doc.type]}</p>
-                        <p className="text-xs text-gray-500">
-                          {doc.uploaded
-                            ? doc.document?.created_at
-                              ? `Yüklendi - ${formatDate(doc.document.created_at)}`
-                              : "Yüklendi"
-                            : "Yüklenmedi"}
-                        </p>
-                      </div>
+                      <h3 className="font-semibold text-lg">{DOCUMENT_LABELS[docGroup.type]}</h3>
+                      {docGroup.uploaded && (
+                        <Badge variant="outline" className="ml-2">
+                          {docGroup.documents.length} adet
+                        </Badge>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      {doc.uploaded ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleViewDocument(doc.type)}
+                    
+                    {docGroup.uploaded ? (
+                      <div className="space-y-2 pl-7">
+                        {docGroup.documents.map((doc: any, index: number) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3"
                           >
-                            <Eye className="mr-2 h-3 w-3" />
-                            Görüntüle
-                          </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button size="sm" variant="outline">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handlePrintDocument(doc.type)}>
-                                <Printer className="mr-2 h-4 w-4" />
-                                Yazdır
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteDocument(doc.type)}
-                                className="text-red-600 focus:text-red-600"
+                            <div className="flex items-center gap-3">
+                              <FileText className="h-4 w-4 text-green-600" />
+                              <div>
+                                <p className="text-sm font-medium">
+                                  {DOCUMENT_LABELS[docGroup.type]} #{index + 1}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {doc.created_at ? formatDate(doc.created_at) : "Yüklendi"}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleViewDocument(doc)}
                               >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Sil
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </>
-                      ) : (
+                                <Eye className="mr-2 h-3 w-3" />
+                                Görüntüle
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => handlePrintDocument(doc)}>
+                                    <Printer className="mr-2 h-4 w-4" />
+                                    Yazdır
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteDocument(doc)}
+                                    className="text-red-600 focus:text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Sil
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        ))}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDocumentUpload(doc.type)}
+                          onClick={() => handleDocumentUpload(docGroup.type)}
+                          className="ml-7"
+                        >
+                          <Upload className="mr-2 h-3 w-3" />
+                          Yeni {DOCUMENT_LABELS[docGroup.type]} Ekle
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="pl-7">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDocumentUpload(docGroup.type)}
                         >
                           <Upload className="mr-2 h-3 w-3" />
                           Yükle
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
