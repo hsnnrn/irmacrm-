@@ -98,10 +98,7 @@ export default function PositionDetailPage({
   const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(
     null
   );
-  const [selectedDocument, setSelectedDocument] = useState<{
-    fileUrl: string;
-    filePath: string | null;
-  } | null>(null);
+  const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
   const [expandedDocTypes, setExpandedDocTypes] = useState<Set<DocumentType>>(
     new Set()
   );
@@ -186,11 +183,13 @@ export default function PositionDetailPage({
   };
 
   const handleViewDocument = (doc: any) => {
-    setSelectedDocType(doc.type as DocumentType);
-    setSelectedDocument({
-      fileUrl: doc.file_url,
-      filePath: doc.file_path || null,
-    });
+    const docType = doc.type as DocumentType;
+    setSelectedDocType(docType);
+    
+    // Get all documents of this type
+    const allDocsOfType = documentsByType.get(docType) || [];
+    setSelectedDocuments(allDocsOfType);
+    
     setViewDialogOpen(true);
   };
 
@@ -773,8 +772,7 @@ export default function PositionDetailPage({
         open={viewDialogOpen}
         onOpenChange={setViewDialogOpen}
         documentType={selectedDocType}
-        fileUrl={selectedDocument?.fileUrl || null}
-        filePath={selectedDocument?.filePath || null}
+        documents={selectedDocuments}
       />
 
       <StatusChangeDialog
