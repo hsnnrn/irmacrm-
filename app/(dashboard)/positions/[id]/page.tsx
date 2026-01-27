@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -91,23 +91,20 @@ export default function PositionDetailPage({
   const [positionId, setPositionId] = useState<string | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const getParams = async () => {
-      try {
-        const resolvedParams = await params;
-        if (isMounted) {
-          setPositionId(resolvedParams.id);
-        }
-      } catch (error) {
+    let cancelled = false;
+    params.then((resolvedParams) => {
+      if (!cancelled) {
+        setPositionId(resolvedParams.id);
+      }
+    }).catch((error) => {
+      if (!cancelled) {
         console.error("Error resolving params:", error);
       }
-    };
-    getParams();
+    });
     return () => {
-      isMounted = false;
+      cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [params]);
 
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
@@ -162,17 +159,29 @@ export default function PositionDetailPage({
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
 
+  // Memoize position financial values to prevent unnecessary re-renders
+  const positionFinancialValues = useMemo(() => {
+    if (!position) return null;
+    return {
+      sales_price: position.sales_price,
+      sales_currency: position.sales_currency,
+      cost_price: position.cost_price,
+      cost_currency: position.cost_currency,
+      id: position.id,
+    };
+  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency]);
+
   // Initialize financial data when position loads
   useEffect(() => {
-    if (!position || isEditingFinancials) return;
+    if (!positionFinancialValues || isEditingFinancials) return;
     
     setFinancialData({
-      sales_price: position.sales_price?.toString() || "",
-      sales_currency: position.sales_currency || "USD",
-      cost_price: position.cost_price?.toString() || "",
-      cost_currency: position.cost_currency || "USD",
+      sales_price: positionFinancialValues.sales_price?.toString() || "",
+      sales_currency: positionFinancialValues.sales_currency || "USD",
+      cost_price: positionFinancialValues.cost_price?.toString() || "",
+      cost_currency: positionFinancialValues.cost_currency || "USD",
     });
-  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
+  }, [positionFinancialValues, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
