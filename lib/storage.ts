@@ -25,7 +25,9 @@ export async function uploadDocument(
 ): Promise<{ url: string; path: string } | null> {
   try {
     const fileExt = file.name.split(".").pop();
-    const fileName = `${positionId}/${docType}_${Date.now()}.${fileExt}`;
+    // Use timestamp + random number to ensure unique filename
+    const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const fileName = `${positionId}/${docType}_${uniqueId}.${fileExt}`;
 
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)

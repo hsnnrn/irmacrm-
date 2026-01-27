@@ -94,8 +94,9 @@ export function useUploadDocument() {
 
       let data, error;
       
-      // If document exists, update it; otherwise insert new one
+      // If document exists, update it; otherwise try insert
       if (existingDocTyped && existingDocTyped.id) {
+        // Update existing document
         const updateResult = await supabase
           .from("documents")
           // @ts-expect-error - Supabase type inference issue with Update types
@@ -112,6 +113,7 @@ export function useUploadDocument() {
         data = updateResult.data;
         error = updateResult.error;
       } else {
+        // Try to insert new document
         const insertResult = await supabase
           .from("documents")
           // @ts-ignore - Supabase type inference issue with Database types
@@ -121,6 +123,40 @@ export function useUploadDocument() {
         
         data = insertResult.data;
         error = insertResult.error;
+
+        // If insert fails with 409 (conflict), it means document was created between our check and insert
+        // In this case, fetch the existing document and update it
+        if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409'))) {
+          console.log('Insert conflict detected, fetching existing document and updating...');
+          
+          // Fetch the existing document
+          const { data: conflictDoc } = await supabase
+            .from("documents")
+            .select("id")
+            .eq("position_id", positionId)
+            .eq("type", type)
+            .maybeSingle();
+
+          const conflictDocTyped = conflictDoc as { id: string } | null;
+          if (conflictDocTyped?.id) {
+            // Update the existing document
+            const updateResult = await supabase
+              .from("documents")
+              // @ts-expect-error - Supabase type inference issue with Update types
+              .update({
+                file_url: uploadResult.url,
+                file_path: uploadResult.path,
+                uploaded_by: userId,
+                is_verified: false,
+              })
+              .eq("id", conflictDocTyped.id)
+              .select()
+              .single();
+            
+            data = updateResult.data;
+            error = updateResult.error;
+          }
+        }
       }
 
       if (error) throw error;
