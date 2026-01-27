@@ -357,10 +357,16 @@ export default function PositionDetailPage({
         ? 1 
         : getExchangeRate(financialData.cost_currency);
       
-      // Calculate estimated profit in TRY
+      // Calculate estimated profit in TRY first
       const salesInTry = salesPrice ? salesPrice * salesExchangeRate : 0;
       const costInTry = costPrice ? costPrice * costExchangeRate : 0;
-      const estimatedProfit = salesInTry - costInTry;
+      const profitInTry = salesInTry - costInTry;
+      
+      // Convert profit to sales currency (not TRY) for storage
+      // Kar her zaman satış para biriminde kaydedilmeli
+      const estimatedProfit = financialData.sales_currency === "TRY"
+        ? profitInTry
+        : (salesExchangeRate !== 0 ? profitInTry / salesExchangeRate : 0);
 
       // Get exchange rates snapshot
       const exchangeRatesSnapshot = await getExchangeRateSnapshot();
