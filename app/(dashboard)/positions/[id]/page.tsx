@@ -92,15 +92,32 @@ export default function PositionDetailPage({
 
   useEffect(() => {
     let cancelled = false;
-    params.then((resolvedParams) => {
-      if (!cancelled) {
-        setPositionId(resolvedParams.id);
+    
+    const resolveParams = async () => {
+      try {
+        // Check if params is a Promise or already resolved
+        let resolvedParams: { id: string };
+        
+        if (params && typeof (params as any).then === 'function') {
+          // It's a Promise
+          resolvedParams = await params;
+        } else {
+          // It's already resolved (production build sometimes does this)
+          resolvedParams = params as unknown as { id: string };
+        }
+        
+        if (!cancelled && resolvedParams?.id) {
+          setPositionId(resolvedParams.id);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error resolving params:", error);
+        }
       }
-    }).catch((error) => {
-      if (!cancelled) {
-        console.error("Error resolving params:", error);
-      }
-    });
+    };
+    
+    resolveParams();
+    
     return () => {
       cancelled = true;
     };
