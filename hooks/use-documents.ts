@@ -52,6 +52,29 @@ export function useUploadDocument() {
       file,
       uploadedBy,
     }: UploadDocumentParams) => {
+      // Mevcut kullanıcı (varsa)
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = uploadedBy ?? user?.id ?? null;
+
+      // Check if document already exists for this position and type
+      const { data: existingDoc } = await supabase
+        .from("documents")
+        .select("id, file_path")
+        .eq("position_id", positionId)
+        .eq("type", type)
+        .maybeSingle();
+
+      // If document exists, delete old file from storage first
+      const existingDocTyped = existingDoc as { id: string; file_path: string | null } | null;
+      if (existingDocTyped && existingDocTyped.file_path) {
+        try {
+          await deleteDocumentFile(existingDocTyped.file_path);
+        } catch (error) {
+          console.warn("Failed to delete old document file:", error);
+          // Continue anyway - we'll upload new file
+        }
+      }
+
       // Upload file to Supabase Storage
       const uploadResult = await uploadDocument(file, positionId, type);
       
@@ -59,11 +82,7 @@ export function useUploadDocument() {
         throw new Error("Belge yüklenirken bir hata oluştu");
       }
 
-      // Mevcut kullanıcı (varsa)
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = uploadedBy ?? user?.id ?? null;
-
-      // Save document metadata to database
+      // Prepare document data
       const documentData: DocumentInsert = {
         position_id: positionId,
         type,
@@ -72,13 +91,37 @@ export function useUploadDocument() {
         uploaded_by: userId,
         is_verified: false,
       };
+
+      let data, error;
       
-      const { data, error } = await supabase
-        .from("documents")
-        // @ts-ignore - Supabase type inference issue with Database types
-        .insert([documentData])
-        .select()
-        .single();
+      // If document exists, update it; otherwise insert new one
+      if (existingDocTyped && existingDocTyped.id) {
+        const updateResult = await supabase
+          .from("documents")
+          // @ts-expect-error - Supabase type inference issue with Update types
+          .update({
+            file_url: uploadResult.url,
+            file_path: uploadResult.path,
+            uploaded_by: userId,
+            is_verified: false,
+          })
+          .eq("id", existingDocTyped.id)
+          .select()
+          .single();
+        
+        data = updateResult.data;
+        error = updateResult.error;
+      } else {
+        const insertResult = await supabase
+          .from("documents")
+          // @ts-ignore - Supabase type inference issue with Database types
+          .insert([documentData])
+          .select()
+          .single();
+        
+        data = insertResult.data;
+        error = insertResult.error;
+      }
 
       if (error) throw error;
       return data;

@@ -29,8 +29,8 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
     params: {
       eventsPerSecond: 10,
     },
-    // Handle WebSocket connection errors gracefully
-    log_level: process.env.NODE_ENV === "production" ? "error" : "info",
+    // Handle WebSocket connection errors gracefully - don't show errors in production
+    log_level: "error",
   },
   // Standard auth configuration for production
   auth: {
