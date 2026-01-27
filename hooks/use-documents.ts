@@ -54,7 +54,22 @@ export function useUploadDocument() {
     }: UploadDocumentParams) => {
       // Mevcut kullanıcı (varsa)
       const { data: { user } } = await supabase.auth.getUser();
-      const userId = uploadedBy ?? user?.id ?? null;
+      let userId = uploadedBy ?? user?.id ?? null;
+
+      // Check if user exists in profiles table before using as uploaded_by
+      // If not, set to null to avoid foreign key constraint error
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", userId)
+          .single();
+        
+        if (!profile) {
+          console.warn(`User ${userId} not found in profiles table, setting uploaded_by to null`);
+          userId = null;
+        }
+      }
 
       // Upload file to Supabase Storage first
       const uploadResult = await uploadDocument(file, positionId, type);
