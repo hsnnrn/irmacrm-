@@ -1178,17 +1178,81 @@ export default function PositionDetailPage({
                     );
                   })}
                   <div className="mt-4 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">Toplam Ödemeler:</p>
-                      <p className="font-bold text-red-600">
-                        {formatCurrency(
-                          paymentsData.reduce((sum: number, payment: any) => {
-                            return sum + payment.amount * (payment.exchange_rate || 1);
-                          }, 0),
-                          "TRY"
-                        )}
-                      </p>
-                    </div>
+                    {(() => {
+                      // Tüm ödemelerin para birimlerini kontrol et
+                      const currencies = new Set(paymentsData.map((p: any) => p.currency));
+                      const hasMultipleCurrencies = currencies.size > 1;
+                      
+                      // Eğer farklı para birimleri varsa EUR'ye çevir, yoksa kendi para biriminde göster
+                      let totalAmount = 0;
+                      let displayCurrency = "TRY";
+                      
+                      if (hasMultipleCurrencies) {
+                        // Farklı para birimleri varsa - EUR'ye çevir
+                        // Her ödeme kendi kurundan (payment.exchange_rate) TRY'ye çevrilir, sonra EUR'ye
+                        displayCurrency = "EUR";
+                        
+                        // EUR kuru için exchange_rate'i bul
+                        // Önce position'dan exchange_rates_snapshot'tan EUR_TRY'yi al
+                        let eurExchangeRate = 0;
+                        if (typedPosition?.exchange_rates_snapshot && typeof typedPosition.exchange_rates_snapshot === 'object' && typedPosition.exchange_rates_snapshot !== null) {
+                          const snapshot = typedPosition.exchange_rates_snapshot as any;
+                          eurExchangeRate = snapshot.EUR_TRY || 0;
+                        }
+                        
+                        // Eğer snapshot'ta yoksa, exchangeRates'ten al
+                        if (eurExchangeRate === 0 && exchangeRates?.EUR) {
+                          eurExchangeRate = exchangeRates.EUR.selling;
+                        }
+                        
+                        // Fallback: Hala yoksa, position'dan sales_exchange_rate kullan (eğer EUR ise)
+                        if (eurExchangeRate === 0 && typedPosition?.sales_currency === "EUR") {
+                          eurExchangeRate = getPositionExchangeRate(typedPosition, "sales");
+                        }
+                        
+                        totalAmount = paymentsData.reduce((sum: number, payment: any) => {
+                          const paymentAmount = payment.amount;
+                          const paymentCurrency = payment.currency;
+                          
+                          if (paymentCurrency === "EUR") {
+                            return sum + paymentAmount;
+                          }
+                          
+                          // Önce TRY'ye çevir (payment.exchange_rate kullanarak - ödemenin yapıldığı kur)
+                          const paymentInTry = paymentAmount * (payment.exchange_rate || 1);
+                          
+                          // Sonra EUR'ye çevir (EUR kuru kullanarak)
+                          if (eurExchangeRate > 0) {
+                            return sum + (paymentInTry / eurExchangeRate);
+                          }
+                          
+                          // Fallback: EUR kuru yoksa direkt amount'u kullan
+                          return sum + paymentAmount;
+                        }, 0);
+                      } else {
+                        // Tüm ödemeler aynı para biriminde - direkt topla (kendi para biriminde)
+                        displayCurrency = Array.from(currencies)[0] as string || "TRY";
+                        totalAmount = paymentsData.reduce((sum: number, payment: any) => {
+                          return sum + payment.amount;
+                        }, 0);
+                      }
+                      
+                      return (
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold">Toplam Ödemeler:</p>
+                          <div className="text-right">
+                            <p className="font-bold text-red-600">
+                              {formatCurrency(totalAmount, displayCurrency)}
+                            </p>
+                            {hasMultipleCurrencies && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                (Farklı para birimleri EUR'ye çevrildi)
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (
