@@ -32,6 +32,7 @@ import {
   Edit,
   Save,
   X,
+  DollarSign,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -47,13 +48,23 @@ import type { PositionStatus, DocumentType } from "@/lib/position-utils";
 import { DocumentUploadDialog } from "@/components/business/document-upload-dialog";
 import { DocumentViewDialog } from "@/components/business/document-view-dialog";
 import { StatusChangeDialog } from "@/components/business/status-change-dialog";
+import { PaymentDialog } from "@/components/business/payment-dialog";
 import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/hooks/use-positions";
 import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
+import {
+  usePositionPayments,
+  useCreatePayment,
+  useUpdatePayment,
+  useDeletePayment,
+  PAYMENT_TYPE_LABELS,
+  type PaymentType,
+} from "@/hooks/use-payments";
 import { translateSupabaseError } from "@/lib/utils";
 import { getExchangeRateSnapshot } from "@/lib/exchange-rates";
+import { supabase } from "@/lib/supabase";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -128,13 +139,18 @@ export default function PositionDetailPage({
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
   const { data: invoicesData } = usePositionInvoices(positionId || "");
+  const { data: paymentsData } = usePositionPayments(positionId || "");
   const { data: exchangeRates } = useExchangeRates();
   const updatePosition = useUpdatePosition();
   const deleteDocument = useDeleteDocument();
+  const createPayment = useCreatePayment();
+  const updatePayment = useUpdatePayment();
+  const deletePayment = useDeletePayment();
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(
     null
   );
@@ -148,6 +164,14 @@ export default function PositionDetailPage({
     sales_currency: "USD",
     cost_price: "",
     cost_currency: "USD",
+  });
+  const [paymentFormData, setPaymentFormData] = useState({
+    payment_type: "FUEL" as PaymentType,
+    description: "",
+    amount: "",
+    currency: "TRY" as "TRY" | "USD" | "EUR" | "RUB",
+    exchange_rate: "",
+    payment_date: new Date().toISOString().split("T")[0],
   });
 
   // Loading state
@@ -416,6 +440,57 @@ export default function PositionDetailPage({
       });
     }
     setIsEditingFinancials(false);
+  };
+
+  const handleSavePayment = async () => {
+    if (!positionId || !paymentFormData.amount || !paymentFormData.payment_date) {
+      toast({
+        title: "Hata!",
+        description: "Lütfen tüm gerekli alanları doldurun.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      await createPayment.mutateAsync({
+        position_id: positionId,
+        payment_type: paymentFormData.payment_type,
+        description: paymentFormData.description || null,
+        amount: parseFloat(paymentFormData.amount),
+        currency: paymentFormData.currency,
+        exchange_rate: paymentFormData.currency === "TRY" 
+          ? 1 
+          : parseFloat(paymentFormData.exchange_rate || "1"),
+        payment_date: paymentFormData.payment_date,
+        created_by: user?.id || null,
+      } as any);
+
+      toast({
+        title: "Başarılı!",
+        description: "Ödeme başarıyla eklendi.",
+      });
+
+      // Reset form
+      setPaymentFormData({
+        payment_type: "FUEL",
+        description: "",
+        amount: "",
+        currency: "TRY",
+        exchange_rate: "1",
+        payment_date: new Date().toISOString().split("T")[0],
+      });
+      
+      setPaymentDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
   };
 
   const customerName = typedPosition.customers?.company_name || "Müşteri";
@@ -982,7 +1057,17 @@ export default function PositionDetailPage({
                   // Calculate profit in TRY (always use TRY for accurate calculation)
                   const salesInTry = salesPrice * salesRate;
                   const costInTry = costPrice * costRate;
-                  const profitInTry = salesInTry - costInTry;
+                  let profitInTry = salesInTry - costInTry;
+                  
+                  // Subtract payments from profit (convert all payments to TRY)
+                  if (paymentsData && paymentsData.length > 0) {
+                    const totalPaymentsInTry = paymentsData.reduce((sum: number, payment: any) => {
+                      const paymentRate = payment.exchange_rate || 1;
+                      const paymentInTry = payment.amount * paymentRate;
+                      return sum + paymentInTry;
+                    }, 0);
+                    profitInTry -= totalPaymentsInTry;
+                  }
                   
                   // Calculate profit margin in TRY
                   const profitMargin = salesInTry !== 0 ? ((profitInTry / salesInTry) * 100) : 0;
@@ -1018,6 +1103,105 @@ export default function PositionDetailPage({
               </CardContent>
             </Card>
           </div>
+
+          {/* Payments Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Ödemeler</CardTitle>
+                  <CardDescription>
+                    Pozisyon için yapılan ödemeler (yakıt, harcırah, avans vb.)
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    // TODO: Open payment dialog
+                    setPaymentDialogOpen(true);
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Ödeme Ekle
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {paymentsData && paymentsData.length > 0 ? (
+                <div className="space-y-3">
+                  {paymentsData.map((payment: any) => {
+                    const paymentInTry = payment.amount * (payment.exchange_rate || 1);
+                    return (
+                      <div
+                        key={payment.id}
+                        className="flex items-center justify-between rounded-lg border p-4"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <DollarSign className="h-4 w-4 text-gray-500" />
+                            <p className="font-medium">
+                              {PAYMENT_TYPE_LABELS[payment.payment_type as PaymentType]}
+                            </p>
+                          </div>
+                          {payment.description && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {payment.description}
+                            </p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formatDate(payment.payment_date)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {formatCurrency(payment.amount, payment.currency)}
+                          </p>
+                          {payment.currency !== "TRY" && (
+                            <p className="text-xs text-gray-500">
+                              {formatCurrency(paymentInTry, "TRY")}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            if (confirm("Bu ödemeyi silmek istediğinize emin misiniz?")) {
+                              deletePayment.mutate(payment.id);
+                            }
+                          }}
+                          className="ml-2"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold">Toplam Ödemeler:</p>
+                      <p className="font-bold text-red-600">
+                        {formatCurrency(
+                          paymentsData.reduce((sum: number, payment: any) => {
+                            return sum + payment.amount * (payment.exchange_rate || 1);
+                          }, 0),
+                          "TRY"
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <DollarSign className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>Henüz ödeme kaydı yok</p>
+                  <p className="text-sm mt-1">
+                    Yakıt, harcırah, avans gibi ödemeleri buradan ekleyebilirsiniz.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card className="border-red-200 bg-red-50">
             <CardContent className="pt-6">
@@ -1090,6 +1274,15 @@ export default function PositionDetailPage({
         currentStatus={typedPosition.status as PositionStatus}
         allowedStatuses={allowedStatuses}
         onStatusChange={handleStatusChange}
+      />
+
+      <PaymentDialog
+        open={paymentDialogOpen}
+        onOpenChange={setPaymentDialogOpen}
+        positionId={positionId || ""}
+        onSave={handleSavePayment}
+        formData={paymentFormData}
+        onFormDataChange={setPaymentFormData}
       />
     </div>
   );
