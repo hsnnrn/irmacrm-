@@ -177,10 +177,11 @@ export default function PositionDetailPage({
   const typedPosition = position as PositionWithRelations;
 
   // Initialize financial data when position loads - only when not editing
+  // Use positionId as the main dependency to avoid object reference issues
   useEffect(() => {
-    if (!position || isEditingFinancials) return;
+    if (!position || !positionId || isEditingFinancials) return;
     
-    // Only update if values actually changed
+    // Extract values directly from position to avoid stale closures
     const newSalesPrice = position.sales_price?.toString() || "";
     const newCostPrice = position.cost_price?.toString() || "";
     const newSalesCurrency = position.sales_currency || "USD";
@@ -204,7 +205,8 @@ export default function PositionDetailPage({
         cost_currency: newCostCurrency,
       };
     });
-  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positionId, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
