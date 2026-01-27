@@ -161,7 +161,7 @@ export default function PositionDetailPage({
         cost_currency: position.cost_currency || "USD",
       });
     }
-  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
+  }, [position, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
