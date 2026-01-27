@@ -965,17 +965,35 @@ export default function PositionDetailPage({
                   const salesCurrency = isDraft && isEditingFinancials
                     ? financialData.sales_currency
                     : typedPosition.sales_currency;
-                  const estimatedProfit = salesPrice - costPrice;
-                  const profitMargin = salesPrice !== 0 ? ((estimatedProfit / salesPrice) * 100) : 0;
+                  const costCurrency = isDraft && isEditingFinancials
+                    ? financialData.cost_currency
+                    : typedPosition.cost_currency;
+                  
+                  // Get exchange rates
+                  const salesRate = getPositionExchangeRate(typedPosition, "sales");
+                  const costRate = getPositionExchangeRate(typedPosition, "cost");
+                  
+                  // Calculate profit in TRY (always use TRY for accurate calculation)
+                  const salesInTry = salesPrice * salesRate;
+                  const costInTry = costPrice * costRate;
+                  const profitInTry = salesInTry - costInTry;
+                  
+                  // Calculate profit margin in TRY
+                  const profitMargin = salesInTry !== 0 ? ((profitInTry / salesInTry) * 100) : 0;
+                  
+                  // Convert profit back to sales currency for display (if not TRY)
+                  const profitInSalesCurrency = salesCurrency === "TRY" 
+                    ? profitInTry 
+                    : (salesRate !== 0 ? profitInTry / salesRate : 0);
 
                   return (
                     <div className="flex justify-between items-end">
                       <div>
                         <p className="text-3xl font-bold text-green-600">
-                          {formatCurrency(estimatedProfit, salesCurrency)}
+                          {formatCurrency(profitInSalesCurrency, salesCurrency)}
                         </p>
                         <p className="text-sm text-green-700">
-                          {salesPrice !== 0
+                          {salesInTry !== 0
                             ? `%${profitMargin.toFixed(1)} kar marjı`
                             : "—"}
                         </p>
@@ -984,11 +1002,7 @@ export default function PositionDetailPage({
                         <div className="text-right">
                           <p className="text-xs text-green-700">TRY Karşılığı</p>
                           <p className="text-sm font-bold text-green-700">
-                            {formatCurrency(
-                              salesPrice * getPositionExchangeRate(typedPosition, "sales") -
-                                costPrice * getPositionExchangeRate(typedPosition, "cost"),
-                              "TRY"
-                            )}
+                            {formatCurrency(profitInTry, "TRY")}
                           </p>
                         </div>
                       )}
