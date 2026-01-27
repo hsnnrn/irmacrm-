@@ -23,6 +23,9 @@ import {
   Upload,
   Loader2,
   Eye,
+  MoreVertical,
+  Trash2,
+  Printer,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
@@ -39,10 +42,16 @@ import { DocumentUploadDialog } from "@/components/business/document-upload-dial
 import { DocumentViewDialog } from "@/components/business/document-view-dialog";
 import { StatusChangeDialog } from "@/components/business/status-change-dialog";
 import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/hooks/use-positions";
-import { useDocuments } from "@/hooks/use-documents";
+import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
 import { translateSupabaseError } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // All document types
 const allDocumentTypes: DocumentType[] = [
@@ -78,6 +87,7 @@ export default function PositionDetailPage({
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
   const { data: invoicesData } = usePositionInvoices(positionId || "");
   const updatePosition = useUpdatePosition();
+  const deleteDocument = useDeleteDocument();
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -170,6 +180,46 @@ export default function PositionDetailPage({
         filePath: doc.file_path || null,
       });
       setViewDialogOpen(true);
+    }
+  };
+
+  const handleDeleteDocument = async (docType: DocumentType) => {
+    const doc = documentsMap.get(docType);
+    if (!doc || !doc.file_path) return;
+
+    if (!confirm(`${DOCUMENT_LABELS[docType]} belgesini silmek istediğinize emin misiniz?`)) {
+      return;
+    }
+
+    try {
+      await deleteDocument.mutateAsync({
+        id: doc.id,
+        positionId: positionId || "",
+        filePath: doc.file_path,
+      });
+      toast({
+        title: "Başarılı!",
+        description: "Belge başarıyla silindi.",
+      });
+      refetchDocuments();
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePrintDocument = (docType: DocumentType) => {
+    const doc = documentsMap.get(docType);
+    if (!doc) return;
+
+    const printWindow = window.open(doc.file_url, "_blank");
+    if (printWindow) {
+      printWindow.onload = () => {
+        printWindow.print();
+      };
     }
   };
 
@@ -414,14 +464,36 @@ export default function PositionDetailPage({
                     </div>
                     <div className="flex items-center gap-2">
                       {doc.uploaded ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleViewDocument(doc.type)}
-                        >
-                          <Eye className="mr-2 h-3 w-3" />
-                          Görüntüle
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewDocument(doc.type)}
+                          >
+                            <Eye className="mr-2 h-3 w-3" />
+                            Görüntüle
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="outline">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handlePrintDocument(doc.type)}>
+                                <Printer className="mr-2 h-4 w-4" />
+                                Yazdır
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDeleteDocument(doc.type)}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Sil
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </>
                       ) : (
                         <Button
                           size="sm"
