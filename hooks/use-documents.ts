@@ -63,6 +63,39 @@ export function useUploadDocument() {
         throw new Error("Belge yüklenirken bir hata oluştu");
       }
 
+      // Get existing document to delete old file if exists
+      const { data: existingDoc } = await supabase
+        .from("documents")
+        .select("id, file_path")
+        .eq("position_id", positionId)
+        .eq("type", type)
+        .maybeSingle();
+
+      const existingDocTyped = existingDoc as { id: string; file_path: string | null } | null;
+
+      // Delete old file from storage if exists
+      if (existingDocTyped?.file_path) {
+        try {
+          await deleteDocumentFile(existingDocTyped.file_path);
+        } catch (error) {
+          console.warn("Failed to delete old document file:", error);
+          // Continue anyway
+        }
+      }
+
+      // Delete existing document from database FIRST (await to ensure it completes)
+      if (existingDocTyped?.id) {
+        const { error: deleteError } = await supabase
+          .from("documents")
+          .delete()
+          .eq("id", existingDocTyped.id);
+        
+        if (deleteError) {
+          console.warn("Failed to delete existing document:", deleteError);
+          // Continue anyway - we'll try insert/update
+        }
+      }
+
       // Prepare document data
       const documentData: DocumentInsert = {
         position_id: positionId,
@@ -73,42 +106,47 @@ export function useUploadDocument() {
         is_verified: false,
       };
 
-      // Strategy: Delete existing document first, then insert new one
-      // This avoids 409 conflicts completely
-      const { data: existingDocs } = await supabase
-        .from("documents")
-        .select("id, file_path")
-        .eq("position_id", positionId)
-        .eq("type", type);
-
-      // Delete existing documents and their files
-      const existingDocsTyped = (existingDocs || []) as Array<{ id: string; file_path: string | null }>;
-      if (existingDocsTyped.length > 0) {
-        for (const doc of existingDocsTyped) {
-          // Delete old file from storage
-          if (doc.file_path) {
-            try {
-              await deleteDocumentFile(doc.file_path);
-            } catch (error) {
-              console.warn("Failed to delete old document file:", error);
-            }
-          }
-          
-          // Delete from database
-          await supabase
-            .from("documents")
-            .delete()
-            .eq("id", doc.id);
-        }
-      }
-
-      // Now insert the new document (no conflict possible)
+      // Now insert the new document (should not conflict since we deleted it)
       const { data, error } = await supabase
         .from("documents")
         // @ts-ignore - Supabase type inference issue with Database types
         .insert([documentData])
         .select()
         .single();
+
+      // If still getting 409, it means another request created it between delete and insert
+      // In this case, update it
+      if (error && (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('409'))) {
+        console.log('Insert conflict after delete, updating existing document...');
+        
+        // Fetch the document that was created
+        const { data: conflictDoc } = await supabase
+          .from("documents")
+          .select("id")
+          .eq("position_id", positionId)
+          .eq("type", type)
+          .maybeSingle();
+
+        const conflictDocTyped = conflictDoc as { id: string } | null;
+        if (conflictDocTyped?.id) {
+          // Update it
+          const updateResult = await supabase
+            .from("documents")
+            // @ts-expect-error - Supabase type inference issue
+            .update({
+              file_url: uploadResult.url,
+              file_path: uploadResult.path,
+              uploaded_by: userId,
+              is_verified: false,
+            })
+            .eq("id", conflictDocTyped.id)
+            .select()
+            .single();
+          
+          if (updateResult.error) throw updateResult.error;
+          return updateResult.data;
+        }
+      }
 
       if (error) throw error;
       return data;
