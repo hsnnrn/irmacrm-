@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -176,29 +176,35 @@ export default function PositionDetailPage({
   // Type assertion for position with relations
   const typedPosition = position as PositionWithRelations;
 
-  // Memoize position financial values to prevent unnecessary re-renders
-  const positionFinancialValues = useMemo(() => {
-    if (!position) return null;
-    return {
-      sales_price: position.sales_price,
-      sales_currency: position.sales_currency,
-      cost_price: position.cost_price,
-      cost_currency: position.cost_currency,
-      id: position.id,
-    };
-  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency]);
-
-  // Initialize financial data when position loads
+  // Initialize financial data when position loads - only when not editing
   useEffect(() => {
-    if (!positionFinancialValues || isEditingFinancials) return;
+    if (!position || isEditingFinancials) return;
     
-    setFinancialData({
-      sales_price: positionFinancialValues.sales_price?.toString() || "",
-      sales_currency: positionFinancialValues.sales_currency || "USD",
-      cost_price: positionFinancialValues.cost_price?.toString() || "",
-      cost_currency: positionFinancialValues.cost_currency || "USD",
+    // Only update if values actually changed
+    const newSalesPrice = position.sales_price?.toString() || "";
+    const newCostPrice = position.cost_price?.toString() || "";
+    const newSalesCurrency = position.sales_currency || "USD";
+    const newCostCurrency = position.cost_currency || "USD";
+    
+    setFinancialData((prev) => {
+      // Only update if values changed to prevent infinite loops
+      if (
+        prev.sales_price === newSalesPrice &&
+        prev.cost_price === newCostPrice &&
+        prev.sales_currency === newSalesCurrency &&
+        prev.cost_currency === newCostCurrency
+      ) {
+        return prev;
+      }
+      
+      return {
+        sales_price: newSalesPrice,
+        sales_currency: newSalesCurrency,
+        cost_price: newCostPrice,
+        cost_currency: newCostCurrency,
+      };
     });
-  }, [positionFinancialValues, isEditingFinancials]);
+  }, [position?.id, position?.sales_price, position?.sales_currency, position?.cost_price, position?.cost_currency, isEditingFinancials]);
 
   // Process documents data - support multiple documents per type
   const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
