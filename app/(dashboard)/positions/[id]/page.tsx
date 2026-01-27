@@ -280,6 +280,29 @@ export default function PositionDetailPage({
     });
   };
 
+  const handleStatusChange = async (newStatus: PositionStatus) => {
+    try {
+      await updatePosition.mutateAsync({
+        id: typedPosition.id,
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      });
+      toast({
+        title: "Durum güncellendi!",
+        description: `Pozisyon durumu ${STATUS_LABELS[newStatus]} olarak değiştirildi.`,
+      });
+      setStatusDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const isDraft = typedPosition?.status === "DRAFT";
+
   const handleSaveFinancials = async () => {
     if (!positionId) return;
 
@@ -326,29 +349,6 @@ export default function PositionDetailPage({
       });
     }
     setIsEditingFinancials(false);
-  };
-
-  const isDraft = typedPosition?.status === "DRAFT";
-
-  const handleStatusChange = async (newStatus: PositionStatus) => {
-    try {
-      await updatePosition.mutateAsync({
-        id: typedPosition.id,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      });
-      toast({
-        title: "Durum güncellendi!",
-        description: `Pozisyon durumu ${STATUS_LABELS[newStatus]} olarak değiştirildi.`,
-      });
-      setStatusDialogOpen(false);
-    } catch (error) {
-      toast({
-        title: "Hata!",
-        description: translateSupabaseError(error),
-        variant: "destructive",
-      });
-    }
   };
 
   const customerName = typedPosition.customers?.company_name || "Müşteri";
