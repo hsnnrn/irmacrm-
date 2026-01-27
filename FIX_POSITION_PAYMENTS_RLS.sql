@@ -13,6 +13,10 @@ DROP POLICY IF EXISTS "Allow authenticated delete access" ON position_payments;
 -- Bu komut RLS'yi tamamen devre dışı bırakır, hiçbir policy'ye ihtiyaç kalmaz
 ALTER TABLE position_payments DISABLE ROW LEVEL SECURITY;
 
+-- 3. FOREIGN KEY CONSTRAINT'İ KONTROL ET VE GEREKİRSE DÜZELT
+-- created_by için NULL değerine izin ver (zaten var ama emin olmak için)
+ALTER TABLE position_payments ALTER COLUMN created_by DROP NOT NULL;
+
 -- 3. SEÇENEK B: EĞER RLS'Yİ AÇIK TUTMAK İSTİYORSANIZ (Yukarıdaki komutu çalıştırmayın)
 -- Aşağıdaki politikaları kullanın - tüm authenticated kullanıcılara tam erişim verir
 /*

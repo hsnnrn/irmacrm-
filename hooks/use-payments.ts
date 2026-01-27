@@ -67,14 +67,39 @@ export function useCreatePayment() {
 
   return useMutation<Payment, Error, PaymentInsert>({
     mutationFn: async (payment: PaymentInsert) => {
+      // Check if user exists in profiles table before using as created_by
+      // If not, set to null to avoid foreign key constraint error
+      let userId = payment.created_by;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", userId)
+          .maybeSingle();
+        
+        if (!profile) {
+          console.warn(`User ${userId} not found in profiles table, setting created_by to null`);
+          userId = null;
+        }
+      }
+
+      // Prepare payment data with validated created_by
+      const paymentData = {
+        ...payment,
+        created_by: userId,
+      };
+
       const { data, error } = await supabase
         .from("position_payments")
         // @ts-ignore - Supabase type inference issue
-        .insert([payment])
+        .insert([paymentData])
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Payment insert error:", error);
+        throw error;
+      }
       return data as Payment;
     },
     onSuccess: (_, variables) => {
