@@ -24,6 +24,7 @@ CREATE TABLE customers (
   phone TEXT,
   risk_limit DECIMAL(15,2) DEFAULT 0,
   current_balance DECIMAL(15,2) DEFAULT 0,
+  account_currency currency_code NOT NULL DEFAULT 'TRY',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

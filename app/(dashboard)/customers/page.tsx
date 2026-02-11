@@ -128,6 +128,7 @@ export default function CustomersPage() {
         "Yetkili Kişi",
         "E-posta",
         "Telefon",
+        "Cari Döviz",
         "Risk Limiti",
         "Mevcut Bakiye",
         "Risk Durumu",
@@ -139,8 +140,9 @@ export default function CustomersPage() {
         customer.contact_person || "-",
         customer.email || "-",
         customer.phone || "-",
-        formatCurrencyForExport(customer.risk_limit || 0, "TRY"),
-        formatCurrencyForExport(customer.current_balance || 0, "TRY"),
+        customer.account_currency || "TRY",
+        formatCurrencyForExport(customer.risk_limit || 0, customer.account_currency || "TRY"),
+        formatCurrencyForExport(customer.current_balance || 0, customer.account_currency || "TRY"),
         getRiskStatus(customer.current_balance || 0, customer.risk_limit || 1).text,
         formatDateForExport(customer.created_at),
       ]),
@@ -293,6 +295,7 @@ export default function CustomersPage() {
                   />
                 </TableHead>
                 <TableHead>İletişim</TableHead>
+                <TableHead className="text-center">Cari Döviz</TableHead>
                 <TableHead className="text-right">
                   <SortableHeader
                     label="Risk Limiti"
@@ -340,11 +343,16 @@ export default function CustomersPage() {
                         <p className="text-gray-500 whitespace-nowrap">{customer.phone || "-"}</p>
                       </div>
                     </TableCell>
+                    <TableCell className="text-center align-top">
+                      <Badge variant="outline">
+                        {customer.account_currency || "TRY"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right whitespace-nowrap align-top">
-                      {formatCurrency(customer.risk_limit, "TRY")}
+                      {formatCurrency(customer.risk_limit, customer.account_currency || "TRY")}
                     </TableCell>
                     <TableCell className="text-right font-semibold whitespace-nowrap align-top">
-                      {formatCurrency(customer.current_balance, "TRY")}
+                      {formatCurrency(customer.current_balance, customer.account_currency || "TRY")}
                     </TableCell>
                     <TableCell className="align-top">
                       <Badge variant={riskStatus.variant}>

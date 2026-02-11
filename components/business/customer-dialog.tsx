@@ -12,10 +12,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCreateCustomer, useUpdateCustomer } from "@/hooks/use-customers";
 import { useToast } from "@/hooks/use-toast";
 import { translateSupabaseError } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+
+const CURRENCY_OPTIONS = ["TRY", "USD", "EUR", "RUB"] as const;
+type AccountCurrency = (typeof CURRENCY_OPTIONS)[number];
 
 interface CustomerDialogProps {
   open: boolean;
@@ -41,11 +51,15 @@ export function CustomerDialog({
     phone: "",
     risk_limit: 0,
     current_balance: 0,
+    account_currency: "TRY" as AccountCurrency,
   });
 
   useEffect(() => {
     if (customer) {
-      setFormData(customer);
+      setFormData({
+        ...customer,
+        account_currency: (customer.account_currency || "TRY") as AccountCurrency,
+      });
     } else {
       setFormData({
         company_name: "",
@@ -55,6 +69,7 @@ export function CustomerDialog({
         phone: "",
         risk_limit: 0,
         current_balance: 0,
+        account_currency: "TRY" as AccountCurrency,
       });
     }
   }, [customer, open]);
@@ -166,9 +181,38 @@ export function CustomerDialog({
               />
             </div>
 
+            <div className="space-y-2">
+              <Label>Cari Döviz Cinsi</Label>
+              <Select
+                value={formData.account_currency || "TRY"}
+                onValueChange={(value) =>
+                  setFormData({
+                    ...formData,
+                    account_currency: value as AccountCurrency,
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Para birimi seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Risk limiti ve bakiye bu para biriminde girilir.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="risk_limit">Risk Limiti (TRY)</Label>
+                <Label htmlFor="risk_limit">
+                  Risk Limiti ({formData.account_currency || "TRY"})
+                </Label>
                 <Input
                   id="risk_limit"
                   type="number"
@@ -182,7 +226,9 @@ export function CustomerDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="current_balance">Mevcut Bakiye (TRY)</Label>
+                <Label htmlFor="current_balance">
+                  Mevcut Bakiye ({formData.account_currency || "TRY"})
+                </Label>
                 <Input
                   id="current_balance"
                   type="number"

@@ -19,6 +19,7 @@ export interface Database {
           phone: string | null
           risk_limit: number
           current_balance: number
+          account_currency: string
           created_at: string
         }
         Insert: {
@@ -30,6 +31,7 @@ export interface Database {
           phone?: string | null
           risk_limit?: number
           current_balance?: number
+          account_currency?: string
           created_at?: string
         }
         Update: {
@@ -41,6 +43,7 @@ export interface Database {
           phone?: string | null
           risk_limit?: number
           current_balance?: number
+          account_currency?: string
           created_at?: string
         }
       }
