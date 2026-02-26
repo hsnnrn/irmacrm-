@@ -119,7 +119,7 @@ END $$;
 --
 -- CREATE TABLE IF NOT EXISTS document_types (
 --   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
---   code text NOT NULL UNIQUE,
+--   type text NOT NULL UNIQUE, -- DRIVER_LICENSE, CMR vb.
 --   label text NOT NULL,
 --   is_required_for_departure boolean NOT NULL DEFAULT false,
 --   is_required_for_close boolean NOT NULL DEFAULT false,
@@ -128,7 +128,7 @@ END $$;
 -- );
 --
 -- Öntanımlı sistem evrak türleri
-INSERT INTO document_types (code, label, is_required_for_departure, is_required_for_close)
+INSERT INTO document_types (type, label, is_required_for_departure, is_required_for_close)
 VALUES
   ('DRIVER_LICENSE', 'Sürücü Belgesi', true, false),
   ('VEHICLE_LICENSE', 'Araç Ruhsatı', true, false),

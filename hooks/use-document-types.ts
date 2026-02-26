@@ -4,7 +4,11 @@ import { DOCUMENT_LABELS, type DocumentType } from "@/lib/position-utils";
 
 export interface DocumentTypeConfig {
   id: string;
-  code: string;
+  /**
+   * Teknik kod / enum değeri.
+   * Supabase tarafında document_types.tablosunda "type" kolonu ile eşleşir.
+   */
+  type: string;
   label: string;
   is_required_for_departure: boolean;
   is_required_for_close: boolean;
@@ -32,7 +36,7 @@ function buildBaseDocumentTypes(): DocumentTypeConfig[] {
 
     return {
       id: `builtin-${code}`,
-      code,
+      type: code,
       label: DOCUMENT_LABELS[code],
       is_required_for_departure: isRequiredForDeparture,
       is_required_for_close: isRequiredForClose,
@@ -68,22 +72,22 @@ export function useDocumentTypes() {
 
       // DB'den gelen kayıtları dahili tiplerle birleştir:
       // - Dahili tipler her zaman listelensin
-      // - Aynı code için DB kaydı varsa, DB kaydı öncelikli olsun
+      // - Aynı type için DB kaydı varsa, DB kaydı öncelikli olsun
       const dbByCode = new Map<string, DocumentTypeConfig>();
       for (const t of dbTypes) {
-        dbByCode.set(t.code, t);
+        dbByCode.set(t.type, t);
       }
 
       const merged: DocumentTypeConfig[] = [];
 
       for (const base of baseTypes) {
-        const fromDb = dbByCode.get(base.code);
+        const fromDb = dbByCode.get(base.type);
         merged.push(fromDb || base);
       }
 
       // DB'de olup dahili listede olmayan (yeni eklenen) kodlar
       for (const t of dbTypes) {
-        if (!BASE_DOCUMENT_TYPE_CODES.includes(t.code as DocumentType)) {
+        if (!BASE_DOCUMENT_TYPE_CODES.includes(t.type as DocumentType)) {
           merged.push(t);
         }
       }
@@ -94,7 +98,7 @@ export function useDocumentTypes() {
 }
 
 interface CreateDocumentTypeInput {
-  code: string;
+  type: string;
   label: string;
   is_required_for_departure?: boolean;
   is_required_for_close?: boolean;
@@ -114,7 +118,8 @@ export function useCreateDocumentType() {
   return useMutation({
     mutationFn: async (input: CreateDocumentTypeInput) => {
       const payload = {
-        code: input.code.trim().toUpperCase(),
+        // Supabase tarafında document_types(type, ...) kolonlarına yazıyoruz
+        type: input.type.trim().toUpperCase(),
         label: input.label.trim(),
         is_required_for_departure: !!input.is_required_for_departure,
         is_required_for_close: !!input.is_required_for_close,

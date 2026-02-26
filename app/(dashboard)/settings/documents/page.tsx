@@ -66,7 +66,7 @@ export default function DocumentTypesSettingsPage() {
 
     try {
       await createMutation.mutateAsync({
-        code: newCode,
+        type: newCode,
         label: newLabel,
         is_required_for_departure: newRequiredForDeparture,
         is_required_for_close: newRequiredForClose,
@@ -129,14 +129,14 @@ export default function DocumentTypesSettingsPage() {
     }
   };
 
-  const handleDelete = async (type: DocumentTypeConfig) => {
-    setDeletingId(type.id);
+  const handleDelete = async (docType: DocumentTypeConfig) => {
+    setDeletingId(docType.id);
     try {
       // Bu türle bağlı evrak var mı kontrol et
       const { count, error } = await supabase
         .from("documents")
         .select("id", { count: "exact", head: true })
-        .eq("type", type.code);
+        .eq("type", docType.type);
 
       if (error) throw error;
 
@@ -150,7 +150,7 @@ export default function DocumentTypesSettingsPage() {
         return;
       }
 
-      await deleteMutation.mutateAsync({ id: type.id });
+      await deleteMutation.mutateAsync({ id: docType.id });
 
       toast({
         title: "Silindi",
@@ -306,7 +306,7 @@ export default function DocumentTypesSettingsPage() {
                     {documentTypes.map((type) => (
                       <TableRow key={type.id}>
                         <TableCell className="font-mono text-xs">
-                          {type.code}
+                          {type.type}
                         </TableCell>
                         <TableCell>{type.label}</TableCell>
                         <TableCell>
