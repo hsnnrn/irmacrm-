@@ -1,13 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import Link from "next/link";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,6 +192,29 @@ export default function SettingsPage() {
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Güncelle
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              <CardTitle>Evrak Düzenleme</CardTitle>
+            </div>
+            <CardDescription>
+              Pozisyonlara bağlı evrakların türlerini merkezi olarak yönetin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Pozisyonlarda yüklenen belgelerin türünü değiştirmek, yeni türde evrak eklemek
+              veya yanlış eklenen belgeleri silmek için evrak düzenleme ekranını kullanın.
+            </p>
+            <Link href="/settings/documents">
+              <Button variant="outline" className="w-full">
+                Evrak Düzenleme Sayfasına Git
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 

@@ -284,3 +284,36 @@ export function useDeleteDocument() {
   });
 }
 
+export function useUpdateDocumentType() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      positionId,
+      type,
+    }: {
+      id: string;
+      positionId: string;
+      type: DocumentType;
+    }) => {
+      const { error } = await supabase
+        .from("documents")
+        // @ts-expect-error - Supabase update typing
+        .update({ type })
+        .eq("id", id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["documents", variables.positionId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["position", variables.positionId],
+      });
+    },
+  });
+}
+
+
