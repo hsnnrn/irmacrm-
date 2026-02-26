@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { DOCUMENT_LABELS, type DocumentType } from "@/lib/position-utils";
 
 export interface DocumentTypeConfig {
   id: string;
@@ -11,17 +12,83 @@ export interface DocumentTypeConfig {
   created_at: string;
 }
 
+// Varsayılan (dahili) evrak türleri - DB olmasa da bunları her zaman göster
+const BASE_DOCUMENT_TYPE_CODES = Object.keys(DOCUMENT_LABELS) as DocumentType[];
+
+function buildBaseDocumentTypes(): DocumentTypeConfig[] {
+  return BASE_DOCUMENT_TYPE_CODES.map((code) => {
+    const isRequiredForDeparture = [
+      "DRIVER_LICENSE",
+      "VEHICLE_LICENSE",
+      "INSURANCE",
+      "TRANSPORT_CONTRACT",
+    ].includes(code);
+
+    const isRequiredForClose = [
+      "CMR",
+      "SALES_INVOICE",
+      "PURCHASE_INVOICE",
+    ].includes(code);
+
+    return {
+      id: `builtin-${code}`,
+      code,
+      label: DOCUMENT_LABELS[code],
+      is_required_for_departure: isRequiredForDeparture,
+      is_required_for_close: isRequiredForClose,
+      is_active: true,
+      created_at: "1970-01-01T00:00:00.000Z",
+    };
+  });
+}
+
 export function useDocumentTypes() {
   return useQuery<DocumentTypeConfig[]>({
     queryKey: ["document-types"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("document_types")
-        .select("*")
-        .order("created_at", { ascending: true });
+      let dbTypes: DocumentTypeConfig[] = [];
 
-      if (error) throw error;
-      return (data || []) as DocumentTypeConfig[];
+      try {
+        const { data, error } = await (supabase as any)
+          .from("document_types")
+          .select("*")
+          .order("created_at", { ascending: true });
+
+        if (error) {
+          // Tablo yoksa veya başka bir hata varsa logla ama UI'yi düşürme
+          console.warn("document_types tablosu okunurken hata:", error);
+        } else if (data) {
+          dbTypes = data as DocumentTypeConfig[];
+        }
+      } catch (err) {
+        console.warn("document_types sorgusu sırasında beklenmeyen hata:", err);
+      }
+
+      const baseTypes = buildBaseDocumentTypes();
+
+      // DB'den gelen kayıtları dahili tiplerle birleştir:
+      // - Dahili tipler her zaman listelensin
+      // - Aynı code için DB kaydı varsa, DB kaydı öncelikli olsun
+      const dbByCode = new Map<string, DocumentTypeConfig>();
+      for (const t of dbTypes) {
+        dbByCode.set(t.code, t);
+      }
+
+      const merged: DocumentTypeConfig[] = [];
+
+      for (const base of baseTypes) {
+        const fromDb = dbByCode.get(base.code);
+        merged.push(fromDb || base);
+      }
+
+      // DB'de olup dahili listede olmayan (yeni eklenen) kodlar
+      for (const t of dbTypes) {
+        if (!BASE_DOCUMENT_TYPE_CODES.includes(t.code as DocumentType)) {
+          merged.push(t);
+        }
+      }
+
+      return merged;
     },
   });
 }
