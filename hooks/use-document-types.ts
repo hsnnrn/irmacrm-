@@ -53,6 +53,7 @@ export function useCreateDocumentType() {
         is_required_for_close: !!input.is_required_for_close,
       };
 
+      // @ts-expect-error - Supabase type inference issue for custom table document_types
       const { data, error } = await supabase
         .from("document_types")
         .insert([payload])
@@ -75,6 +76,7 @@ export function useUpdateDocumentType() {
     mutationFn: async (input: UpdateDocumentTypeInput) => {
       const { id, ...updates } = input;
 
+      // @ts-expect-error - Supabase type inference issue for custom table document_types
       const { data, error } = await supabase
         .from("document_types")
         .update(updates)
@@ -96,6 +98,7 @@ export function useDeleteDocumentType() {
 
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
+      // @ts-expect-error - Supabase type inference issue for custom table document_types
       const { error } = await supabase
         .from("document_types")
         .delete()
