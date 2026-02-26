@@ -66,10 +66,19 @@ export default function CustomerCariPage() {
     const payments = data?.payments || [];
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
-    const totalReceivable = salesInvoices.reduce(
+
+    // Toplam Borç: öncelik faturalar, yoksa sefer satış tutarları
+    const totalFromInvoices = salesInvoices.reduce(
       (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
       0
     );
+    const totalFromPositions = pos.reduce((sum, p) => {
+      const price = p.sales_price || 0;
+      const fromCur = (p.sales_currency as string) || currency;
+      return sum + toCustomerCurrency(price, fromCur);
+    }, 0);
+    const totalReceivable =
+      salesInvoices.length > 0 ? totalFromInvoices : totalFromPositions;
     const totalReceived = payments.reduce(
       (sum, p) => sum + toCustomerCurrency(p.amount, p.currency),
       0
