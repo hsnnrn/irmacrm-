@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, User, Bell, Shield, Database, Loader2, Eye, EyeOff } from "lucide-react";
+import { Settings, User, Bell, Shield, Database, Loader2, Eye, EyeOff, FileText } from "lucide-react";
+import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -158,7 +164,7 @@ export default function SettingsPage() {
         <p className="text-gray-500">Sistem ayarlarınızı yönetin</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -192,29 +198,6 @@ export default function SettingsPage() {
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Güncelle
             </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              <CardTitle>Evrak Düzenleme</CardTitle>
-            </div>
-            <CardDescription>
-              Pozisyonlara bağlı evrakların türlerini merkezi olarak yönetin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Pozisyonlarda yüklenen belgelerin türünü değiştirmek, yeni türde evrak eklemek
-              veya yanlış eklenen belgeleri silmek için evrak düzenleme ekranını kullanın.
-            </p>
-            <Link href="/settings/documents">
-              <Button variant="outline" className="w-full">
-                Evrak Düzenleme Sayfasına Git
-              </Button>
-            </Link>
           </CardContent>
         </Card>
 
@@ -368,6 +351,30 @@ export default function SettingsPage() {
               <span className="text-sm text-gray-600">Giriş Tipi</span>
               <span className="font-semibold">Supabase Auth</span>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2 lg:col-span-1">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              <CardTitle>Evrak Türleri</CardTitle>
+            </div>
+            <CardDescription>
+              Pozisyonlarda kullanılan evrak türlerini ekleyin, düzenleyin ve
+              zorunluluk ayarlarını yönetin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-sm text-gray-600">
+              Örnek: A Belgesi gibi yeni bir evrak türü ekleyebilir, çıkış ve
+              kapanış için zorunlu olup olmadığını belirleyebilirsiniz.
+            </p>
+            <Link href="/settings/documents">
+              <Button variant="outline" className="w-full">
+                Evrak Türlerini Yönet
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

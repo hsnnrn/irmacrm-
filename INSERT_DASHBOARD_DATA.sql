@@ -113,3 +113,30 @@ BEGIN
   END LOOP;
 END $$;
 
+-- 4. Evrak Türleri (opsiyonel - yoksa oluşturun)
+-- NOT: Bu bölüm, dinamik evrak türü yönetimi için document_types tablosunu kullanır.
+-- Tabloyu henüz oluşturmadıysanız, aşağıdaki CREATE TABLE komutunu bir kez çalıştırın:
+--
+-- CREATE TABLE IF NOT EXISTS document_types (
+--   id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+--   code text NOT NULL UNIQUE,
+--   label text NOT NULL,
+--   is_required_for_departure boolean NOT NULL DEFAULT false,
+--   is_required_for_close boolean NOT NULL DEFAULT false,
+--   is_active boolean NOT NULL DEFAULT true,
+--   created_at timestamptz NOT NULL DEFAULT now()
+-- );
+--
+-- Öntanımlı sistem evrak türleri
+INSERT INTO document_types (code, label, is_required_for_departure, is_required_for_close)
+VALUES
+  ('DRIVER_LICENSE', 'Sürücü Belgesi', true, false),
+  ('VEHICLE_LICENSE', 'Araç Ruhsatı', true, false),
+  ('INSURANCE', 'Sigorta Belgesi', true, false),
+  ('TRANSPORT_CONTRACT', 'Taşıma Sözleşmesi', true, false),
+  ('CMR', 'CMR (Teslimat Belgesi)', false, true),
+  ('SALES_INVOICE', 'Satış Faturası', false, true),
+  ('PURCHASE_INVOICE', 'Alış Faturası', false, true)
+ON CONFLICT (code) DO NOTHING;
+
+

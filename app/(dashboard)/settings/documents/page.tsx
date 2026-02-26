@@ -1,275 +1,360 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Settings, FileText, ArrowLeft, Plus, Trash2, Edit } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { usePositions } from "@/hooks/use-positions";
-import { useDocuments, useDeleteDocument, useUpdateDocumentType } from "@/hooks/use-documents";
-import { DOCUMENT_LABELS, type DocumentType } from "@/lib/position-utils";
-import { formatDate } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  AlertCircle,
+  Loader2,
+  Plus,
+  Trash2,
+  ArrowLeft,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { DocumentUploadDialog } from "@/components/business/document-upload-dialog";
+import { supabase } from "@/lib/supabase";
+import {
+  useDocumentTypes,
+  useCreateDocumentType,
+  useUpdateDocumentType,
+  useDeleteDocumentType,
+  type DocumentTypeConfig,
+} from "@/hooks/use-document-types";
 
-export default function DocumentSettingsPage() {
+export default function DocumentTypesSettingsPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { data: documentTypes, isLoading, error } = useDocumentTypes();
+  const createMutation = useCreateDocumentType();
+  const updateMutation = useUpdateDocumentType();
+  const deleteMutation = useDeleteDocumentType();
 
-  const { data: positions = [], isLoading: positionsLoading } = usePositions();
+  const [newCode, setNewCode] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newRequiredForDeparture, setNewRequiredForDeparture] = useState(true);
+  const [newRequiredForClose, setNewRequiredForClose] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const [selectedPositionId, setSelectedPositionId] = useState<string>("");
-  const [selectedDocTypeForUpload, setSelectedDocTypeForUpload] = useState<DocumentType | null>(null);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const { data: documents = [], isLoading: documentsLoading } = useDocuments(selectedPositionId || "");
-  const deleteDocument = useDeleteDocument();
-  const updateDocumentType = useUpdateDocumentType();
-
-  const handleDeleteDocument = async (doc: any) => {
-    if (!doc || !doc.file_path) return;
-
-    if (!confirm(`${DOCUMENT_LABELS[doc.type as DocumentType]} belgesini silmek istediğinize emin misiniz?`)) {
-      return;
-    }
-
-    try {
-      await deleteDocument.mutateAsync({
-        id: doc.id,
-        positionId: selectedPositionId,
-        filePath: doc.file_path,
-      });
-      toast({
-        title: "Başarılı!",
-        description: "Belge başarıyla silindi.",
-      });
-    } catch (error) {
-      toast({
-        title: "Hata!",
-        description: "Belge silinirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleChangeType = async (docId: string, newType: DocumentType) => {
-    if (!selectedPositionId) return;
-
-    try {
-      await updateDocumentType.mutateAsync({
-        id: docId,
-        positionId: selectedPositionId,
-        type: newType,
-      });
-      toast({
-        title: "Güncellendi",
-        description: "Belge türü güncellendi.",
-      });
-    } catch {
-      toast({
-        title: "Hata!",
-        description: "Belge türü güncellenirken bir hata oluştu.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleOpenUpload = () => {
-    if (!selectedPositionId || !selectedDocTypeForUpload) {
+    if (!newCode.trim() || !newLabel.trim()) {
       toast({
         title: "Uyarı",
-        description: "Lütfen pozisyon ve evrak türü seçin.",
+        description: "Kod ve ad alanları zorunludur.",
+        variant: "destructive",
       });
       return;
     }
-    setUploadDialogOpen(true);
+
+    try {
+      await createMutation.mutateAsync({
+        code: newCode,
+        label: newLabel,
+        is_required_for_departure: newRequiredForDeparture,
+        is_required_for_close: newRequiredForClose,
+      });
+
+      setNewCode("");
+      setNewLabel("");
+      setNewRequiredForDeparture(true);
+      setNewRequiredForClose(false);
+
+      toast({
+        title: "Başarılı",
+        description: "Yeni evrak türü eklendi.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Hata",
+        description: err.message || "Evrak türü eklenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleUploadSaved = () => {
-    setUploadDialogOpen(false);
-    setSelectedDocTypeForUpload(null);
+  const handleToggleActive = async (type: DocumentTypeConfig) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: type.id,
+        is_active: !type.is_active,
+      });
+
+      toast({
+        title: "Güncellendi",
+        description: `Evrak türü ${!type.is_active ? "aktif" : "pasif"} yapıldı.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Hata",
+        description: err.message || "Kayıt güncellenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const allDocumentTypes: DocumentType[] = [
-    "DRIVER_LICENSE",
-    "VEHICLE_LICENSE",
-    "INSURANCE",
-    "TRANSPORT_CONTRACT",
-    "CMR",
-    "SALES_INVOICE",
-    "PURCHASE_INVOICE",
-  ];
+  const handleUpdateFlags = async (
+    type: DocumentTypeConfig,
+    field: "is_required_for_departure" | "is_required_for_close",
+    value: boolean
+  ) => {
+    try {
+      await updateMutation.mutateAsync({
+        id: type.id,
+        [field]: value,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Hata",
+        description: err.message || "Kayıt güncellenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    }
+  };
 
-  const selectedPosition = positions.find((p) => p.id === selectedPositionId);
+  const handleDelete = async (type: DocumentTypeConfig) => {
+    setDeletingId(type.id);
+    try {
+      // Bu türle bağlı evrak var mı kontrol et
+      const { count, error } = await supabase
+        .from("documents")
+        .select("id", { count: "exact", head: true })
+        .eq("type", type.code);
+
+      if (error) throw error;
+
+      if (count && count > 0) {
+        toast({
+          title: "Silinemedi",
+          description:
+            "Bu evrak türüne bağlı pozisyon evrakları var. Önce bu evrakları başka bir türe taşıyın veya türü pasif yapın.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await deleteMutation.mutateAsync({ id: type.id });
+
+      toast({
+        title: "Silindi",
+        description: "Evrak türü başarıyla silindi.",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Hata",
+        description: err.message || "Evrak türü silinirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push("/settings")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Settings className="h-6 w-6" />
-              Evrak Düzenleme
-            </h1>
-            <p className="text-gray-500">
-              Pozisyonlara bağlı belgeleri tür bazında yönetin. Evrak türü ekleme, silme ve değiştirme işlemlerini buradan yapabilirsiniz.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Evrak Türleri
+          </h1>
+          <p className="text-gray-500">
+            Pozisyonlar için kullanılan evrak türlerini yönetin. Yeni tür
+            ekleyebilir, zorunluluk durumlarını ayarlayabilir ve türleri
+            pasif/aktif yapabilirsiniz.
+          </p>
         </div>
-        {selectedPosition && (
-          <Link href={`/positions/${selectedPosition.id}`}>
-            <Button variant="outline" size="sm">
-              İlgili Pozisyona Git
-            </Button>
-          </Link>
-        )}
+        <Button variant="outline" onClick={() => router.push("/settings")}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Ayarlara Dön
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pozisyon Seçimi</CardTitle>
-          <CardDescription>
-            Evraklarını düzenlemek istediğiniz pozisyonu seçin.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Select
-            value={selectedPositionId}
-            onValueChange={(value) => setSelectedPositionId(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder={positionsLoading ? "Yükleniyor..." : "Pozisyon seçin"} />
-            </SelectTrigger>
-            <SelectContent>
-              {positions.map((position) => (
-                <SelectItem key={position.id} value={position.id}>
-                  Pozisyon #{position.position_no} -{" "}
-                  {position.customers?.company_name || "Müşteri"} /{" "}
-                  {position.suppliers?.company_name || "Tedarikçi"}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      {selectedPositionId && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <div>
-              <CardTitle>Belge Listesi</CardTitle>
-              <CardDescription>
-                Seçili pozisyona bağlı belgeleri görüntüleyin, türlerini değiştirin veya silin.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedDocTypeForUpload || ""}
-                onValueChange={(value) => setSelectedDocTypeForUpload(value as DocumentType)}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Evrak türü seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {allDocumentTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {DOCUMENT_LABELS[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={handleOpenUpload}>
-                <Plus className="mr-2 h-4 w-4" />
-                Evrak Yükle
-              </Button>
-            </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle>Yeni Evrak Türü</CardTitle>
+            <CardDescription>
+              Örnek: kod: A_DOCUMENT, ad: A Belgesi. Kod, sistem içinde
+              kullanılacak benzersiz anahtardır.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {documentsLoading ? (
-              <p className="text-gray-500 text-sm">Belgeler yükleniyor...</p>
-            ) : documents.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-gray-500">
-                <FileText className="h-10 w-10 mb-2 opacity-60" />
-                <p>Bu pozisyona ait kayıtlı belge bulunmuyor.</p>
+            <form className="space-y-4" onSubmit={handleAdd}>
+              <div className="space-y-2">
+                <Label htmlFor="code">Kod</Label>
+                <Input
+                  id="code"
+                  placeholder="Örn: A_DOCUMENT"
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value)}
+                />
+                <p className="text-xs text-gray-500">
+                  Büyük harf ve alt çizgi kullanmanız önerilir. Örn:
+                  DRIVER_LICENSE, A_DOCUMENT vb.
+                </p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="label">Ad</Label>
+                <Input
+                  id="label"
+                  placeholder="Örn: A Belgesi"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                />
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="req-departure">
+                    Çıkış için zorunlu
+                  </Label>
+                  <Checkbox
+                    id="req-departure"
+                    checked={newRequiredForDeparture}
+                    onCheckedChange={(checked) =>
+                      setNewRequiredForDeparture(checked === true)
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="req-close">Kapanış için zorunlu</Label>
+                  <Checkbox
+                    id="req-close"
+                    checked={newRequiredForClose}
+                    onCheckedChange={(checked) =>
+                      setNewRequiredForClose(checked === true)
+                    }
+                  />
+                </div>
+              </div>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createMutation.isPending}
+              >
+                {createMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                Evrak Türü Ekle
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Mevcut Evrak Türleri</CardTitle>
+            <CardDescription>
+              Sistem genelinde kullanılan tüm evrak türlerini buradan
+              yönetebilirsiniz.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <span className="text-gray-500">
+                  Evrak türleri yükleniyor...
+                </span>
+              </div>
+            ) : error ? (
+              <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4" />
+                <span>
+                  Evrak türleri yüklenirken bir hata oluştu. Lütfen daha
+                  sonra tekrar deneyin.
+                </span>
+              </div>
+            ) : !documentTypes || documentTypes.length === 0 ? (
+              <p className="text-sm text-gray-500">
+                Henüz tanımlı evrak türü yok. Soldan yeni bir tür ekleyin.
+              </p>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Evrak Türü</TableHead>
-                      <TableHead>Yüklenme Tarihi</TableHead>
+                      <TableHead>Kod</TableHead>
+                      <TableHead>Ad</TableHead>
+                      <TableHead>Çıkış</TableHead>
+                      <TableHead>Kapanış</TableHead>
                       <TableHead>Durum</TableHead>
-                      <TableHead className="w-[260px] text-right">İşlemler</TableHead>
+                      <TableHead className="text-right">
+                        İşlemler
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {documents.map((doc: any) => (
-                      <TableRow key={doc.id}>
+                    {documentTypes.map((type) => (
+                      <TableRow key={type.id}>
+                        <TableCell className="font-mono text-xs">
+                          {type.code}
+                        </TableCell>
+                        <TableCell>{type.label}</TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-xs text-gray-500">
-                              Teknik Kod: {doc.type}
-                            </span>
-                            <Select
-                              value={doc.type}
-                              onValueChange={(value) =>
-                                handleChangeType(doc.id, value as DocumentType)
-                              }
-                            >
-                              <SelectTrigger className="w-[220px]">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allDocumentTypes.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {DOCUMENT_LABELS[type]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                          <Checkbox
+                            checked={type.is_required_for_departure}
+                            onCheckedChange={(checked) =>
+                              handleUpdateFlags(
+                                type,
+                                "is_required_for_departure",
+                                checked === true
+                              )
+                            }
+                          />
                         </TableCell>
                         <TableCell>
-                          {doc.created_at ? formatDate(doc.created_at) : "-"}
+                          <Checkbox
+                            checked={type.is_required_for_close}
+                            onCheckedChange={(checked) =>
+                              handleUpdateFlags(
+                                type,
+                                "is_required_for_close",
+                                checked === true
+                              )
+                            }
+                          />
                         </TableCell>
                         <TableCell>
-                          {doc.is_verified ? (
-                            <Badge variant="success">Onaylı</Badge>
-                          ) : (
-                            <Badge variant="outline">Onaysız</Badge>
-                          )}
+                          <Button
+                            size="sm"
+                            variant={type.is_active ? "outline" : "secondary"}
+                            onClick={() => handleToggleActive(type)}
+                          >
+                            {type.is_active ? "Aktif" : "Pasif"}
+                          </Button>
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Link
-                              href={`/positions/${selectedPositionId}`}
-                              className="inline-flex"
-                            >
-                              <Button variant="outline" size="sm">
-                                <Edit className="mr-2 h-4 w-4" />
-                                Pozisyonda Gör
-                              </Button>
-                            </Link>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteDocument(doc)}
-                            >
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => handleDelete(type)}
+                            disabled={deletingId === type.id}
+                          >
+                            {deletingId === type.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
                               <Trash2 className="h-4 w-4 text-red-600" />
-                            </Button>
-                          </div>
+                            )}
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -279,15 +364,7 @@ export default function DocumentSettingsPage() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      <DocumentUploadDialog
-        open={uploadDialogOpen}
-        onOpenChange={setUploadDialogOpen}
-        documentType={selectedDocTypeForUpload}
-        positionId={selectedPositionId || ""}
-        onSave={handleUploadSaved}
-      />
+      </div>
     </div>
   );
 }
