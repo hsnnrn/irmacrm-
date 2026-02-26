@@ -188,7 +188,23 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
           body { margin: 0; padding: 0; }
         }
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; padding: 24px; color: #1f2937; }
+        body { font-family: Arial, sans-serif; padding: 24px; color: #1f2937; position: relative; }
+        body::before {
+          content: "";
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          width: 400px;
+          height: 400px;
+          transform: translate(-50%, -50%);
+          background-image: url('/irma-logo-watermark.png');
+          background-repeat: no-repeat;
+          background-position: center;
+          background-size: contain;
+          opacity: 0.06;
+          z-index: -1;
+          pointer-events: none;
+        }
         .header {
           border-bottom: 3px solid #c41e3a;
           padding-bottom: 16px;

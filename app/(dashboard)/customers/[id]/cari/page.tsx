@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Printer, Loader2, FileText, Package } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useCustomerLedger } from "@/hooks/use-customer-ledger";
+import { useCustomerLedger, type CustomerLedgerData } from "@/hooks/use-customer-ledger";
 import { STATUS_LABELS } from "@/lib/position-utils";
 import { printCustomerLedger } from "@/lib/print-utils";
 import { convertCurrency } from "@/lib/exchange-rates";
@@ -31,7 +31,10 @@ import { useExchangeRates } from "@/hooks/use-exchange-rates";
 export default function CustomerCariPage() {
   const params = useParams();
   const customerId = params?.id as string | undefined;
-  const { data, isLoading, error } = useCustomerLedger(customerId ?? null);
+  const ledger = useCustomerLedger(customerId ?? null);
+  const data = ledger.data as CustomerLedgerData | undefined;
+  const isLoading = ledger.isLoading;
+  const error = ledger.error;
   const { data: exchangeRates } = useExchangeRates();
 
   const currency = data?.customer?.account_currency || "TRY";
@@ -60,22 +63,85 @@ export default function CustomerCariPage() {
     const invs = (data?.allInvoices || []).filter((inv) =>
       posIds.has(inv.position_id)
     );
+    const payments = data?.payments || [];
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
     const totalReceivable = salesInvoices.reduce(
       (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
       0
     );
-    const paidSales = salesInvoices.filter((inv) => inv.is_paid);
-    const totalReceived = paidSales.reduce(
-      (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
+    const totalReceived = payments.reduce(
+      (sum, p) => sum + toCustomerCurrency(p.amount, p.currency),
       0
     );
-    const unpaidSales = salesInvoices.filter((inv) => !inv.is_paid);
-    const balance = unpaidSales.reduce(
-      (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
-      0
-    );
+    const balance = totalReceivable - totalReceived;
+
+    type RawMovement = {
+      date: Date;
+      docNo: string;
+      type: "BORC" | "ALACAK";
+      description: string;
+      amount: number;
+      status: string;
+    };
+
+    const items: RawMovement[] = [];
+
+    // Borç hareketleri (Satış faturaları)
+    salesInvoices.forEach((inv) => {
+      const amt = toCustomerCurrency(inv.amount, inv.currency);
+      const position = pos.find((p) => p.id === inv.position_id);
+      const posLabel = position ? `Poz #${position.position_no}` : "";
+      const routeDesc = position
+        ? `${position.loading_point} → ${position.unloading_point}`
+        : "";
+      const statusLabel =
+        STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
+        position?.status ||
+        "-";
+
+      const desc = position
+        ? `${posLabel} - ${routeDesc} - Satış Faturası`
+        : "Satış Faturası";
+
+      items.push({
+        date: new Date(inv.invoice_date),
+        docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
+        type: "BORC",
+        description: desc,
+        amount: amt,
+        status: statusLabel,
+      });
+    });
+
+    // Alacak hareketleri (müşteri ödemeleri)
+    payments.forEach((p) => {
+      const amt = toCustomerCurrency(p.amount, p.currency);
+      const statusLabel = "Ödeme";
+      const docNo = p.invoice_no || `OD-${p.id.slice(0, 8)}`;
+      const desc = p.description || "Müşteri Ödemesi";
+
+      items.push({
+        date: new Date(p.payment_date),
+        docNo,
+        type: "ALACAK",
+        description: desc,
+        amount: amt,
+        status: statusLabel,
+      });
+    });
+
+    // Tarihe göre sıralama (aynı günde BORÇ -> ALACAK)
+    const typeOrder: Record<"BORC" | "ALACAK", number> = {
+      BORC: 0,
+      ALACAK: 1,
+    };
+
+    items.sort((a, b) => {
+      const diff = a.date.getTime() - b.date.getTime();
+      if (diff !== 0) return diff;
+      return typeOrder[a.type] - typeOrder[b.type];
+    });
 
     const moveList: {
       date: string;
@@ -89,55 +155,24 @@ export default function CustomerCariPage() {
     }[] = [];
 
     let runningBalance = 0;
-    salesInvoices
-      .sort(
-        (a, b) =>
-          new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
-      )
-      .forEach((inv) => {
-        const amt = toCustomerCurrency(inv.amount, inv.currency);
-        const position = pos.find((p) => p.id === inv.position_id);
-        const posLabel = position ? `Poz #${position.position_no}` : "";
-        const routeDesc = position
-          ? `${position.loading_point} → ${position.unloading_point}`
-          : "";
-        const statusLabel =
-          STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
-          position?.status ||
-          "-";
+    items.forEach((item) => {
+      if (item.type === "BORC") {
+        runningBalance += item.amount;
+      } else {
+        runningBalance -= item.amount;
+      }
 
-        const descBorc = position
-          ? `${posLabel} - ${routeDesc} - Satış Faturası`
-          : "Satış Faturası";
-        const descAlacak = position
-          ? `${posLabel} - Tahsilat`
-          : "Tahsilat";
-
-        moveList.push({
-          date: formatDate(inv.invoice_date),
-          docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
-          type: "BORC",
-          description: descBorc,
-          borc: amt,
-          alacak: 0,
-          balance: (runningBalance += amt),
-          status: statusLabel,
-        });
-
-        if (inv.is_paid) {
-          runningBalance -= amt;
-          moveList.push({
-            date: formatDate(inv.invoice_date),
-            docNo: posLabel || `T-${inv.id.slice(0, 8)}`,
-            type: "ALACAK",
-            description: descAlacak,
-            borc: 0,
-            alacak: amt,
-            balance: runningBalance,
-            status: statusLabel,
-          });
-        }
+      moveList.push({
+        date: formatDate(item.date),
+        docNo: item.docNo,
+        type: item.type,
+        description: item.description,
+        borc: item.type === "BORC" ? item.amount : 0,
+        alacak: item.type === "ALACAK" ? item.amount : 0,
+        balance: runningBalance,
+        status: item.status,
       });
+    });
 
     return {
       positions: pos,

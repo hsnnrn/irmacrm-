@@ -16,6 +16,17 @@ type Invoice = {
   created_at: string;
 };
 
+type CustomerPayment = {
+  id: string;
+  customer_id: string;
+  description: string | null;
+  invoice_no: string | null;
+  amount: number;
+  currency: string;
+  payment_date: string;
+  created_at: string;
+};
+
 export type PositionWithInvoices = Position & {
   invoices: Invoice[];
 };
@@ -24,6 +35,7 @@ export type CustomerLedgerData = {
   customer: Customer | null;
   positions: PositionWithInvoices[];
   allInvoices: Invoice[];
+  payments: CustomerPayment[];
 };
 
 export function useCustomerLedger(customerId: string | null) {
@@ -31,7 +43,7 @@ export function useCustomerLedger(customerId: string | null) {
     queryKey: ["customer-ledger", customerId],
     queryFn: async () => {
       if (!customerId) {
-        return { customer: null, positions: [], allInvoices: [] };
+        return { customer: null, positions: [], allInvoices: [], payments: [] };
       }
 
       // Fetch customer
@@ -54,14 +66,6 @@ export function useCustomerLedger(customerId: string | null) {
 
       const positions = (positionsData || []) as Position[];
 
-      if (positions.length === 0) {
-        return {
-          customer: customer as Customer | null,
-          positions: [],
-          allInvoices: [],
-        };
-      }
-
       const positionIds = positions.map((p) => p.id);
 
       // Fetch all invoices for these positions
@@ -75,6 +79,17 @@ export function useCustomerLedger(customerId: string | null) {
 
       const invoiceList = (invoices || []) as Invoice[];
 
+      // Fetch customer payments
+      const { data: payments, error: paymentsError } = await supabase
+        .from("customer_payments")
+        .select("*")
+        .eq("customer_id", customerId)
+        .order("payment_date", { ascending: true });
+
+      if (paymentsError) throw paymentsError;
+
+      const paymentList = (payments || []) as CustomerPayment[];
+
       // Group invoices by position and attach to positions
       const positionsWithInvoices: PositionWithInvoices[] = positions.map(
         (pos) => ({
@@ -87,6 +102,7 @@ export function useCustomerLedger(customerId: string | null) {
         customer: customer as Customer | null,
         positions: positionsWithInvoices,
         allInvoices: invoiceList,
+        payments: paymentList,
       };
     },
     enabled: !!customerId,
