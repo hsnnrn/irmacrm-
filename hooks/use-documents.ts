@@ -20,7 +20,7 @@ interface Document {
 
 interface UploadDocumentParams {
   positionId: string;
-  type: DocumentType;
+  type: string; // DocumentType or custom type from document_types
   file: File;
   uploadedBy?: string;
 }

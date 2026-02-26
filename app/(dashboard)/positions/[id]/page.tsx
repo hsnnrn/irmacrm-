@@ -51,6 +51,7 @@ import { StatusChangeDialog } from "@/components/business/status-change-dialog";
 import { PaymentDialog } from "@/components/business/payment-dialog";
 import { usePosition, useUpdatePosition, type PositionWithRelations } from "@/hooks/use-positions";
 import { useDocuments, useDeleteDocument } from "@/hooks/use-documents";
+import { useDocumentTypes } from "@/hooks/use-document-types";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
@@ -80,17 +81,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-// All document types
-const allDocumentTypes: DocumentType[] = [
-  "DRIVER_LICENSE",
-  "VEHICLE_LICENSE",
-  "INSURANCE",
-  "TRANSPORT_CONTRACT",
-  "CMR",
-  "SALES_INVOICE",
-  "PURCHASE_INVOICE",
-];
 
 export default function PositionDetailPage({
   params,
@@ -138,6 +128,7 @@ export default function PositionDetailPage({
 
   const { data: position, isLoading, error } = usePosition(positionId || "");
   const { data: documentsData, refetch: refetchDocuments } = useDocuments(positionId || "");
+  const { data: documentTypes } = useDocumentTypes();
   const { data: invoicesData } = usePositionInvoices(positionId || "");
   const { data: paymentsData } = usePositionPayments(positionId || "");
   const { data: exchangeRates } = useExchangeRates();
@@ -151,13 +142,9 @@ export default function PositionDetailPage({
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(
-    null
-  );
+  const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
-  const [expandedDocTypes, setExpandedDocTypes] = useState<Set<DocumentType>>(
-    new Set()
-  );
+  const [expandedDocTypes, setExpandedDocTypes] = useState<Set<string>>(new Set());
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
   const [financialData, setFinancialData] = useState({
     sales_price: "",
@@ -216,25 +203,33 @@ export default function PositionDetailPage({
     setIsEditingFinancials(true);
   };
 
+  // Build document types list: active types from settings + any types that have uploaded docs
+  const activeDocTypes = (documentTypes || []).filter((dt) => dt.is_active).map((dt) => dt.type);
+  const typesWithUploadedDocs = Array.from(new Set((documentsData || []).map((d: any) => d.type)));
+  const allDisplayTypes = Array.from(new Set([...activeDocTypes, ...typesWithUploadedDocs]));
+
+  // Label lookup: document_types config first, then DOCUMENT_LABELS fallback
+  const getDocumentLabel = (type: string) =>
+    documentTypes?.find((dt) => dt.type === type)?.label ?? DOCUMENT_LABELS[type as DocumentType] ?? type;
+
   // Process documents data - support multiple documents per type
-  const uploadedDocTypes = (documentsData || []).map((d: any) => d.type as DocumentType);
-  // Group documents by type - each type can have multiple documents
-  const documentsByType = new Map<DocumentType, any[]>();
+  const uploadedDocTypes = (documentsData || []).map((d: any) => d.type);
+  const documentsByType = new Map<string, any[]>();
   (documentsData || []).forEach((doc: any) => {
-    const type = doc.type as DocumentType;
+    const type = doc.type as string;
     if (!documentsByType.has(type)) {
       documentsByType.set(type, []);
     }
     documentsByType.get(type)!.push(doc);
   });
-  
-  const documents = allDocumentTypes.map((type) => {
+
+  const documents = allDisplayTypes.map((type) => {
     const docs = documentsByType.get(type) || [];
     return {
       type,
       uploaded: docs.length > 0,
-      documents: docs, // Array of documents for this type
-      primaryDocument: docs[0] || null, // First document as primary
+      documents: docs,
+      primaryDocument: docs[0] || null,
     };
   });
 
@@ -245,8 +240,8 @@ export default function PositionDetailPage({
   };
 
   // Check departure and closure conditions
-  const departureCheck = canDepart(uploadedDocTypes);
-  const closureCheck = canClose(uploadedDocTypes, invoices);
+  const departureCheck = canDepart(uploadedDocTypes as DocumentType[]);
+  const closureCheck = canClose(uploadedDocTypes as DocumentType[], invoices);
 
   const allowedStatuses = getNextAllowedStatuses(
     typedPosition.status as PositionStatus,
@@ -254,7 +249,7 @@ export default function PositionDetailPage({
     closureCheck.canClose
   );
 
-  const handleDocumentUpload = (docType: DocumentType) => {
+  const handleDocumentUpload = (docType: string) => {
     setSelectedDocType(docType);
     setUploadDialogOpen(true);
   };
@@ -267,7 +262,7 @@ export default function PositionDetailPage({
   };
 
   const handleViewDocument = (doc: any) => {
-    const docType = doc.type as DocumentType;
+    const docType = doc.type as string;
     setSelectedDocType(docType);
     
     // Get all documents of this type
@@ -280,8 +275,8 @@ export default function PositionDetailPage({
   const handleDeleteDocument = async (doc: any) => {
     if (!doc || !doc.file_path) return;
 
-    const docType = doc.type as DocumentType;
-    if (!confirm(`${DOCUMENT_LABELS[docType]} belgesini silmek istediğinize emin misiniz?`)) {
+    const docType = doc.type as string;
+    if (!confirm(`${getDocumentLabel(docType)} belgesini silmek istediğinize emin misiniz?`)) {
       return;
     }
 
@@ -316,12 +311,12 @@ export default function PositionDetailPage({
     }
   };
 
-  const handleAddAdditionalDocument = (docType: DocumentType) => {
+  const handleAddAdditionalDocument = (docType: string) => {
     setSelectedDocType(docType);
     setUploadDialogOpen(true);
   };
 
-  const toggleExpandedDocuments = (docType: DocumentType) => {
+  const toggleExpandedDocuments = (docType: string) => {
     setExpandedDocTypes((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(docType)) {
@@ -696,7 +691,7 @@ export default function PositionDetailPage({
                         )}
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-medium">{DOCUMENT_LABELS[docGroup.type]}</p>
+                            <p className="font-medium">{getDocumentLabel(docGroup.type)}</p>
                             {docGroup.documents.length > 1 && (
                               <Badge variant="outline" className="ml-2">
                                 {docGroup.documents.length} adet
@@ -792,7 +787,7 @@ export default function PositionDetailPage({
                               <FileText className="h-4 w-4 text-green-600" />
                               <div>
                                 <p className="text-sm font-medium">
-                                  {DOCUMENT_LABELS[docGroup.type]} #{index + 2}
+                                  {getDocumentLabel(docGroup.type)} #{index + 2}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {doc.created_at ? formatDate(doc.created_at) : "Yüklendi"}
@@ -1321,6 +1316,7 @@ export default function PositionDetailPage({
         open={uploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
         documentType={selectedDocType}
+        documentLabel={selectedDocType ? getDocumentLabel(selectedDocType) : undefined}
         positionId={positionId || ""}
         onSave={handleDocumentSave}
       />
@@ -1329,6 +1325,7 @@ export default function PositionDetailPage({
         open={viewDialogOpen}
         onOpenChange={setViewDialogOpen}
         documentType={selectedDocType}
+        documentLabel={selectedDocType ? getDocumentLabel(selectedDocType) : undefined}
         documents={selectedDocuments}
       />
 

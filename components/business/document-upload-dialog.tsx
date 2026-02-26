@@ -22,7 +22,8 @@ import { translateSupabaseError } from "@/lib/utils";
 interface DocumentUploadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  documentType: DocumentType | null;
+  documentType: string | null;
+  documentLabel?: string;
   positionId: string;
   onSave: () => void;
 }
@@ -31,6 +32,7 @@ export function DocumentUploadDialog({
   open,
   onOpenChange,
   documentType,
+  documentLabel,
   positionId,
   onSave,
 }: DocumentUploadDialogProps) {
@@ -77,7 +79,7 @@ export function DocumentUploadDialog({
         <DialogHeader>
           <DialogTitle>Belge Yükle</DialogTitle>
           <DialogDescription>
-            {documentType && DOCUMENT_LABELS[documentType]} belgesi yükleyin
+            {documentType && (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType])} belgesi yükleyin
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>

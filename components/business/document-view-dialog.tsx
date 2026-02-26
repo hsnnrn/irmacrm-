@@ -26,7 +26,8 @@ interface Document {
 interface DocumentViewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  documentType: DocumentType | null;
+  documentType: string | null;
+  documentLabel?: string;
   documents: Document[]; // Array of documents to display
 }
 
@@ -34,6 +35,7 @@ export function DocumentViewDialog({
   open,
   onOpenChange,
   documentType,
+  documentLabel,
   documents,
 }: DocumentViewDialogProps) {
   const [documentUrls, setDocumentUrls] = useState<Map<string, string>>(new Map());
@@ -119,7 +121,7 @@ export function DocumentViewDialog({
       <DialogContent className="max-w-5xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>
-            {documentType && DOCUMENT_LABELS[documentType]}
+            {documentType && (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType])}
             {documents.length > 1 && (
               <span className="ml-2 text-sm font-normal text-gray-500">
                 ({documents.length} adet)
@@ -161,7 +163,7 @@ export function DocumentViewDialog({
                   {isImage(doc) ? (
                     <img
                       src={docUrl}
-                      alt={documentType ? DOCUMENT_LABELS[documentType] : "Belge"}
+                      alt={documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : "Belge"}
                       className="max-w-full max-h-[70vh] object-contain rounded-lg"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
@@ -169,7 +171,7 @@ export function DocumentViewDialog({
                         const iframe = document.createElement('iframe');
                         iframe.src = docUrl;
                         iframe.className = 'w-full h-[70vh] border rounded-lg';
-                        iframe.title = documentType ? DOCUMENT_LABELS[documentType] : 'Belge';
+                        iframe.title = documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : 'Belge';
                         target.parentElement?.appendChild(iframe);
                       }}
                     />
@@ -177,7 +179,7 @@ export function DocumentViewDialog({
                     <iframe
                       src={docUrl}
                       className="w-full h-[70vh] border rounded-lg"
-                      title={documentType ? DOCUMENT_LABELS[documentType] : "Belge"}
+                      title={documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : "Belge"}
                     />
                   )}
                 </div>
@@ -217,7 +219,7 @@ export function DocumentViewDialog({
                         {isImage(doc) ? (
                           <img
                             src={docUrl}
-                            alt={`${documentType ? DOCUMENT_LABELS[documentType] : "Belge"} ${index + 1}`}
+                            alt={`${documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : "Belge"} ${index + 1}`}
                             className="max-w-full max-h-[70vh] object-contain rounded-lg"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
@@ -225,7 +227,7 @@ export function DocumentViewDialog({
                               const iframe = document.createElement('iframe');
                               iframe.src = docUrl;
                               iframe.className = 'w-full h-[70vh] border rounded-lg';
-                              iframe.title = `${documentType ? DOCUMENT_LABELS[documentType] : 'Belge'} ${index + 1}`;
+                              iframe.title = `${documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : 'Belge'} ${index + 1}`;
                               target.parentElement?.appendChild(iframe);
                             }}
                           />
@@ -233,7 +235,7 @@ export function DocumentViewDialog({
                           <iframe
                             src={docUrl}
                             className="w-full h-[70vh] border rounded-lg"
-                            title={`${documentType ? DOCUMENT_LABELS[documentType] : "Belge"} ${index + 1}`}
+                            title={`${documentType ? (documentLabel ?? DOCUMENT_LABELS[documentType as DocumentType]) : "Belge"} ${index + 1}`}
                           />
                         )}
                       </div>

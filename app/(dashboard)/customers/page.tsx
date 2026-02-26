@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Search, Loader2, Download, FileSpreadsheet } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CustomerDialog } from "@/components/business/customer-dialog";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -43,6 +43,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useTableFeatures } from "@/hooks/use-table-features";
+import Link from "next/link";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { SortableHeader } from "@/components/ui/sortable-header";
 import type { Tables } from "@/lib/supabase";
@@ -361,6 +362,20 @@ export default function CustomersPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Link href={`/customers/${customer.id}/cari`}>
+                                <Button variant="ghost" size="icon" title="Cari">
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              </Link>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Cari Hesap</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
