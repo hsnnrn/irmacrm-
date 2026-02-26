@@ -64,10 +64,11 @@ export default function CustomerCariPage() {
       posIds.has(inv.position_id)
     );
     const payments = data?.payments || [];
+    const openingBalance = data?.customer?.current_balance || 0;
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
 
-    // Toplam Borç: öncelik faturalar, yoksa sefer satış tutarları
+    // Toplam Borç: önce devir bakiye, sonra faturalar veya sefer satış tutarları
     const totalFromInvoices = salesInvoices.reduce(
       (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
       0
@@ -78,7 +79,7 @@ export default function CustomerCariPage() {
       return sum + toCustomerCurrency(price, fromCur);
     }, 0);
     const totalReceivable =
-      salesInvoices.length > 0 ? totalFromInvoices : totalFromPositions;
+      openingBalance + (salesInvoices.length > 0 ? totalFromInvoices : totalFromPositions);
     const totalReceived = payments.reduce(
       (sum, p) => sum + toCustomerCurrency(p.amount, p.currency),
       0
@@ -163,7 +164,7 @@ export default function CustomerCariPage() {
       status: string;
     }[] = [];
 
-    let runningBalance = 0;
+    let runningBalance = openingBalance;
     items.forEach((item) => {
       if (item.type === "BORC") {
         runningBalance += item.amount;
