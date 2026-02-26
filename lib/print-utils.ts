@@ -121,10 +121,13 @@ export interface CustomerLedgerPrintData {
   }[];
   movements: {
     date: string;
+    docNo: string;
+    type: string;
     description: string;
-    receivable: number;
-    received: number;
+    borc: number;
+    alacak: number;
     balance: number;
+    status?: string;
   }[];
   summary: {
     totalReceivable: number;
@@ -149,9 +152,11 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
       (m) =>
         `<tr>
           <td>${m.date}</td>
+          <td>${m.docNo || "-"}</td>
           <td>${m.description}</td>
-          <td class="text-right">${m.receivable > 0 ? formatMoney(m.receivable) : "-"}</td>
-          <td class="text-right">${m.received > 0 ? formatMoney(m.received) : "-"}</td>
+          <td>${m.status || "-"}</td>
+          <td class="text-right">${m.borc > 0 ? formatMoney(m.borc) : "-"}</td>
+          <td class="text-right">${m.alacak > 0 ? formatMoney(m.alacak) : "-"}</td>
           <td class="text-right font-semibold">${formatMoney(m.balance)}</td>
         </tr>`
     )
@@ -272,22 +277,24 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
         <thead>
           <tr>
             <th>Tarih</th>
-            <th>Açıklama</th>
+            <th>Belge No</th>
+            <th>İşlem / Açıklama</th>
+            <th>Sefer Durumu</th>
+            <th class="text-right">Borç</th>
             <th class="text-right">Alacak</th>
-            <th class="text-right">Tahsilat</th>
             <th class="text-right">Bakiye</th>
           </tr>
         </thead>
-        <tbody>${movementsRows || "<tr><td colspan='5'>Hareket bulunamadı.</td></tr>"}</tbody>
+        <tbody>${movementsRows || "<tr><td colspan='7'>Hareket bulunamadı.</td></tr>"}</tbody>
       </table>
 
       <div class="summary-box">
         <div class="summary-item">
-          <div class="summary-label">Toplam Alacak</div>
+          <div class="summary-label">Toplam Borç</div>
           <div class="summary-value">${formatMoney(data.summary.totalReceivable)} ${cur}</div>
         </div>
         <div class="summary-item">
-          <div class="summary-label">Toplam Tahsilat</div>
+          <div class="summary-label">Toplam Alacak (Tahsilat)</div>
           <div class="summary-value">${formatMoney(data.summary.totalReceived)} ${cur}</div>
         </div>
         <div class="summary-item">

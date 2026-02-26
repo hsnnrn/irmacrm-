@@ -46,9 +46,20 @@ export default function CustomerCariPage() {
     }
   };
 
+  const DEPARTED_STATUSES = [
+    "READY_TO_DEPART",
+    "IN_TRANSIT",
+    "DELIVERED",
+    "COMPLETED",
+  ] as const;
+
   const { positions, movements, summary } = useMemo(() => {
-    const pos = data?.positions || [];
-    const invs = data?.allInvoices || [];
+    const allPos = data?.positions || [];
+    const pos = allPos.filter((p) => DEPARTED_STATUSES.includes(p.status as any));
+    const posIds = new Set(pos.map((p) => p.id));
+    const invs = (data?.allInvoices || []).filter((inv) =>
+      posIds.has(inv.position_id)
+    );
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
     const totalReceivable = salesInvoices.reduce(
@@ -68,14 +79,16 @@ export default function CustomerCariPage() {
 
     const moveList: {
       date: string;
+      docNo: string;
+      type: "BORC" | "ALACAK";
       description: string;
-      receivable: number;
-      received: number;
+      borc: number;
+      alacak: number;
       balance: number;
+      status: string;
     }[] = [];
 
-    let runReceivable = 0;
-    let runReceived = 0;
+    let runningBalance = 0;
     salesInvoices
       .sort(
         (a, b) =>
@@ -84,20 +97,46 @@ export default function CustomerCariPage() {
       .forEach((inv) => {
         const amt = toCustomerCurrency(inv.amount, inv.currency);
         const position = pos.find((p) => p.id === inv.position_id);
-        const desc = position
-          ? `Poz #${position.position_no} - ${position.loading_point} → ${position.unloading_point} - Satış Faturası`
-          : `Satış Faturası`;
-        runReceivable += amt;
-        if (inv.is_paid) {
-          runReceived += amt;
-        }
+        const posLabel = position ? `Poz #${position.position_no}` : "";
+        const routeDesc = position
+          ? `${position.loading_point} → ${position.unloading_point}`
+          : "";
+        const statusLabel =
+          STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
+          position?.status ||
+          "-";
+
+        const descBorc = position
+          ? `${posLabel} - ${routeDesc} - Satış Faturası`
+          : "Satış Faturası";
+        const descAlacak = position
+          ? `${posLabel} - Tahsilat`
+          : "Tahsilat";
+
         moveList.push({
           date: formatDate(inv.invoice_date),
-          description: desc,
-          receivable: amt,
-          received: inv.is_paid ? amt : 0,
-          balance: runReceivable - runReceived,
+          docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
+          type: "BORC",
+          description: descBorc,
+          borc: amt,
+          alacak: 0,
+          balance: (runningBalance += amt),
+          status: statusLabel,
         });
+
+        if (inv.is_paid) {
+          runningBalance -= amt;
+          moveList.push({
+            date: formatDate(inv.invoice_date),
+            docNo: posLabel || `T-${inv.id.slice(0, 8)}`,
+            type: "ALACAK",
+            description: descAlacak,
+            borc: 0,
+            alacak: amt,
+            balance: runningBalance,
+            status: statusLabel,
+          });
+        }
       });
 
     return {
@@ -129,7 +168,16 @@ export default function CustomerCariPage() {
           : undefined,
         deliveryDate: p.delivery_date ? formatDate(p.delivery_date) : undefined,
       })),
-      movements,
+      movements: movements.map((m) => ({
+        date: m.date,
+        docNo: m.docNo,
+        type: m.type,
+        description: m.description,
+        borc: m.borc,
+        alacak: m.alacak,
+        balance: m.balance,
+        status: m.status,
+      })),
       summary,
     });
   };
@@ -224,7 +272,7 @@ export default function CustomerCariPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Toplam Alacak</CardDescription>
+            <CardDescription>Toplam Borç</CardDescription>
             <CardTitle className="text-xl">
               {formatCurrency(summary.totalReceivable, currency)}
             </CardTitle>
@@ -232,7 +280,7 @@ export default function CustomerCariPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Toplam Tahsilat</CardDescription>
+            <CardDescription>Toplam Alacak (Tahsilat)</CardDescription>
             <CardTitle className="text-xl text-emerald-600">
               {formatCurrency(summary.totalReceived, currency)}
             </CardTitle>
@@ -260,7 +308,7 @@ export default function CustomerCariPage() {
             Sefer Listesi
           </CardTitle>
           <CardDescription>
-            Bu müşteriye ait tüm seferler ve tutarlar
+            Yola çıkmış seferler (Hareket Hazır, Yolda, Teslim Edildi, Kapandı)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -326,7 +374,7 @@ export default function CustomerCariPage() {
         <CardHeader>
           <CardTitle>Cari Hesap Hareketleri</CardTitle>
           <CardDescription>
-            Alacak, tahsilat ve bakiye dökümü
+            Borç, alacak ve bakiye hareketleri (standart cari hesap formatı)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -334,9 +382,11 @@ export default function CustomerCariPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Tarih</TableHead>
-                <TableHead>Açıklama</TableHead>
+                <TableHead>Belge No</TableHead>
+                <TableHead>İşlem / Açıklama</TableHead>
+                <TableHead>Sefer Durumu</TableHead>
+                <TableHead className="text-right">Borç</TableHead>
                 <TableHead className="text-right">Alacak</TableHead>
-                <TableHead className="text-right">Tahsilat</TableHead>
                 <TableHead className="text-right">Bakiye</TableHead>
               </TableRow>
             </TableHeader>
@@ -344,7 +394,7 @@ export default function CustomerCariPage() {
               {movements.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={7}
                     className="text-center text-gray-500 py-8"
                   >
                     Henüz cari hareket bulunmuyor.
@@ -354,18 +404,18 @@ export default function CustomerCariPage() {
                 movements.map((m, idx) => (
                   <TableRow key={idx}>
                     <TableCell>{m.date}</TableCell>
+                    <TableCell className="font-mono text-sm">{m.docNo}</TableCell>
                     <TableCell className="max-w-xs truncate" title={m.description}>
                       {m.description}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {m.receivable > 0
-                        ? formatCurrency(m.receivable, currency)
-                        : "-"}
+                    <TableCell>
+                      <Badge variant="outline">{m.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {m.received > 0
-                        ? formatCurrency(m.received, currency)
-                        : "-"}
+                      {m.borc > 0 ? formatCurrency(m.borc, currency) : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.alacak > 0 ? formatCurrency(m.alacak, currency) : "-"}
                     </TableCell>
                     <TableCell className="text-right font-medium">
                       {formatCurrency(m.balance, currency)}
