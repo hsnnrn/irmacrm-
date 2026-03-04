@@ -109,16 +109,6 @@ export interface CustomerLedgerPrintData {
   taxId?: string;
   contactPerson?: string;
   currency: string;
-  positions: {
-    positionNo: number;
-    loadingPoint: string;
-    unloadingPoint: string;
-    salesPrice: number;
-    salesCurrency: string;
-    status: string;
-    departureDate?: string;
-    deliveryDate?: string;
-  }[];
   movements: {
     date: string;
     docNo: string;
@@ -159,21 +149,6 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
           <td class="text-right">${m.alacak > 0 ? formatMoney(m.alacak) : "-"}</td>
           <td class="text-right font-semibold">${formatMoney(m.balance)}</td>
         </tr>`
-    )
-    .join("");
-
-  const positionsRows = data.positions
-    .map(
-      (p) =>
-        `<tr>
-          <td>#${p.positionNo}</td>
-          <td>${p.loadingPoint} → ${p.unloadingPoint}</td>
-          <td class="text-right">${formatMoney(p.salesPrice)} ${p.salesCurrency}</td>
-          <td>${p.status}</td>
-          <td>${p.departureDate || "-"}</td>
-          <td>${p.deliveryDate || "-"}</td>
-        </tr>`
-    )
     .join("");
 
   const html = `
@@ -272,21 +247,6 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
         ${data.contactPerson ? `<div>Yetkili: ${data.contactPerson}</div>` : ""}
         <div style="margin-top:8px;"><strong>Cari Döviz:</strong> ${data.currency}</div>
       </div>
-
-      <div class="section-title">SEFER LİSTESİ</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Poz. No</th>
-            <th>Rota</th>
-            <th class="text-right">Satış Tutarı</th>
-            <th>Durum</th>
-            <th>Yükleme</th>
-            <th>Teslimat</th>
-          </tr>
-        </thead>
-        <tbody>${positionsRows || "<tr><td colspan='6'>Kayıt bulunamadı.</td></tr>"}</tbody>
-      </table>
 
       <div class="section-title">CARİ HESAP HAREKETLERİ</div>
       <table>

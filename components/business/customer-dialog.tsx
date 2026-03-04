@@ -56,6 +56,7 @@ export function CustomerDialog({
     phone: "",
     risk_limit: 0,
     current_balance: 0,
+    previous_year_balance: 0,
     account_currency: "TRY" as AccountCurrency,
   });
 
@@ -75,6 +76,7 @@ export function CustomerDialog({
       setFormData({
         ...customer,
         account_currency: (customer.account_currency || "TRY") as AccountCurrency,
+        previous_year_balance: customer.previous_year_balance ?? 0,
       });
     } else {
       setFormData({
@@ -85,6 +87,7 @@ export function CustomerDialog({
         phone: "",
         risk_limit: 0,
         current_balance: 0,
+        previous_year_balance: 0,
         account_currency: "TRY" as AccountCurrency,
       });
     }
@@ -486,6 +489,27 @@ export function CustomerDialog({
                   }
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="previous_year_balance">
+                Geçen Yıldan Devreden Bakiye ({formData.account_currency || "TRY"})
+              </Label>
+              <Input
+                id="previous_year_balance"
+                type="number"
+                value={formData.previous_year_balance}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    previous_year_balance: parseFloat(e.target.value) || 0,
+                  })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Bu alan sadece önceki yıl devrini temsil eder. Negatif değer girebilirsiniz
+                (alacaklı müşteri için).
+              </p>
             </div>
           </div>
           <DialogFooter>

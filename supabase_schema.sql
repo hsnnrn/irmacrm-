@@ -14,7 +14,6 @@ CREATE TABLE profiles (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Customers (Müşteriler)
 CREATE TABLE customers (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   company_name TEXT NOT NULL,
@@ -24,6 +23,8 @@ CREATE TABLE customers (
   phone TEXT,
   risk_limit DECIMAL(15,2) DEFAULT 0,
   current_balance DECIMAL(15,2) DEFAULT 0,
+  -- Geçen yıldan devreden toplam borç
+  previous_year_balance DECIMAL(18,2) NOT NULL DEFAULT 0,
   account_currency currency_code NOT NULL DEFAULT 'TRY',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

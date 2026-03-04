@@ -19,6 +19,7 @@ export interface Database {
           phone: string | null
           risk_limit: number
           current_balance: number
+          previous_year_balance: number
           account_currency: string
           created_at: string
         }
@@ -31,6 +32,7 @@ export interface Database {
           phone?: string | null
           risk_limit?: number
           current_balance?: number
+          previous_year_balance?: number
           account_currency?: string
           created_at?: string
         }
@@ -43,6 +45,7 @@ export interface Database {
           phone?: string | null
           risk_limit?: number
           current_balance?: number
+          previous_year_balance?: number
           account_currency?: string
           created_at?: string
         }

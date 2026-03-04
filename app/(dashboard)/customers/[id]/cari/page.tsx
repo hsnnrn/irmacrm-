@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { useCustomerLedger, type CustomerLedgerData } from "@/hooks/use-customer-ledger";
 import { STATUS_LABELS } from "@/lib/position-utils";
 import { printCustomerLedger } from "@/lib/print-utils";
+import { exportToExcel } from "@/lib/export-utils";
 import { convertCurrency } from "@/lib/exchange-rates";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 
@@ -64,7 +65,8 @@ export default function CustomerCariPage() {
       posIds.has(inv.position_id)
     );
     const payments = data?.payments || [];
-    const openingBalance = data?.customer?.current_balance || 0;
+    const previousYearBalance = data?.customer?.previous_year_balance || 0;
+    const openingBalance = previousYearBalance;
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
 
@@ -163,8 +165,20 @@ export default function CustomerCariPage() {
       balance: number;
       status: string;
     }[] = [];
-
     let runningBalance = openingBalance;
+
+    if (previousYearBalance !== 0) {
+      moveList.push({
+        date: "Önceki Yıl",
+        docNo: "-",
+        type: previousYearBalance >= 0 ? "BORC" : "ALACAK",
+        description: "Devreden Bakiye",
+        borc: previousYearBalance > 0 ? previousYearBalance : 0,
+        alacak: previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0,
+        balance: runningBalance,
+        status: "-",
+      });
+    }
     items.forEach((item) => {
       if (item.type === "BORC") {
         runningBalance += item.amount;
@@ -201,18 +215,6 @@ export default function CustomerCariPage() {
       taxId: data?.customer?.tax_id || undefined,
       contactPerson: data?.customer?.contact_person || undefined,
       currency,
-      positions: positions.map((p) => ({
-        positionNo: p.position_no,
-        loadingPoint: p.loading_point,
-        unloadingPoint: p.unloading_point,
-        salesPrice: p.sales_price || 0,
-        salesCurrency: p.sales_currency || "TRY",
-        status: STATUS_LABELS[p.status as keyof typeof STATUS_LABELS] || p.status,
-        departureDate: p.departure_date
-          ? formatDate(p.departure_date)
-          : undefined,
-        deliveryDate: p.delivery_date ? formatDate(p.delivery_date) : undefined,
-      })),
       movements: movements.map((m) => ({
         date: m.date,
         docNo: m.docNo,
@@ -226,6 +228,35 @@ export default function CustomerCariPage() {
       summary,
     });
   };
+
+  const handleExportExcel = () => {
+    if (!data) return;
+    exportToExcel(
+      {
+        headers: [
+          "Tarih",
+          "Belge No",
+          "İşlem / Açıklama",
+          "Sefer Durumu",
+          "Borç",
+          "Alacak",
+          "Bakiye",
+        ],
+        rows: movements.map((m) => [
+          m.date,
+          m.docNo,
+          m.description,
+          m.status,
+          m.borc,
+          m.alacak,
+          m.balance,
+        ]),
+      },
+      `Cari_Ekstresi_${data.customer.company_name}`
+    );
+  };
+
+  const [showTrips, setShowTrips] = useState(false);
 
   if (isLoading) {
     return (
@@ -275,10 +306,15 @@ export default function CustomerCariPage() {
             </p>
           </div>
         </div>
-        <Button onClick={handlePrint}>
-          <Printer className="mr-2 h-4 w-4" />
-          Yazdır
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportExcel}>
+            Excel&apos;e Aktar
+          </Button>
+          <Button onClick={handlePrint}>
+            <Printer className="mr-2 h-4 w-4" />
+            Yazdır / PDF
+          </Button>
+        </div>
       </div>
 
       {/* Customer Info Card */}
@@ -347,70 +383,86 @@ export default function CustomerCariPage() {
 
       {/* Sefer Listesi */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Sefer Listesi
-          </CardTitle>
-          <CardDescription>
-            Yola çıkmış seferler (Hareket Hazır, Yolda, Teslim Edildi, Kapandı)
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Sefer Listesi
+            </CardTitle>
+            <CardDescription>
+              Yola çıkmış seferler (Hareket Hazır, Yolda, Teslim Edildi, Kapandı)
+            </CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowTrips((v) => !v)}
+          >
+            {showTrips ? "Sefer Listesini Gizle" : "Sefer Listesini Göster"}
+          </Button>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Poz. No</TableHead>
-                <TableHead>Rota</TableHead>
-                <TableHead className="text-right">Satış Tutarı</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead>Yükleme</TableHead>
-                <TableHead>Teslimat</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {positions.length === 0 ? (
+          {showTrips ? (
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
-                    Henüz sefer kaydı bulunmuyor.
-                  </TableCell>
+                  <TableHead>Poz. No</TableHead>
+                  <TableHead>Rota</TableHead>
+                  <TableHead className="text-right">Satış Tutarı</TableHead>
+                  <TableHead>Durum</TableHead>
+                  <TableHead>Yükleme</TableHead>
+                  <TableHead>Teslimat</TableHead>
                 </TableRow>
-              ) : (
-                positions.map((pos) => (
-                  <TableRow key={pos.id}>
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/positions/${pos.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        #{pos.position_no}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      {pos.loading_point} → {pos.unloading_point}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCurrency(pos.sales_price || 0, pos.sales_currency)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {STATUS_LABELS[pos.status as keyof typeof STATUS_LABELS] ||
-                          pos.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {pos.departure_date
-                        ? formatDate(pos.departure_date)
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {pos.delivery_date ? formatDate(pos.delivery_date) : "-"}
+              </TableHeader>
+              <TableBody>
+                {positions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                      Henüz sefer kaydı bulunmuyor.
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  positions.map((pos) => (
+                    <TableRow key={pos.id}>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/positions/${pos.id}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          #{pos.position_no}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        {pos.loading_point} → {pos.unloading_point}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(pos.sales_price || 0, pos.sales_currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {STATUS_LABELS[pos.status as keyof typeof STATUS_LABELS] ||
+                            pos.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {pos.departure_date
+                          ? formatDate(pos.departure_date)
+                          : "-"}
+                      </TableCell>
+                      <TableCell>
+                        {pos.delivery_date ? formatDate(pos.delivery_date) : "-"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Sefer listesi performans için varsayılan olarak gizlidir. Görüntülemek için
+              yukarıdaki butona tıklayın.
+            </p>
+          )}
         </CardContent>
       </Card>
 
