@@ -149,6 +149,7 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
           <td class="text-right">${m.alacak > 0 ? formatMoney(m.alacak) : "-"}</td>
           <td class="text-right font-semibold">${formatMoney(m.balance)}</td>
         </tr>`
+    )
     .join("");
 
   const html = `
