@@ -230,7 +230,8 @@ export default function CustomerCariPage() {
   };
 
   const handleExportExcel = () => {
-    if (!data) return;
+    if (!data || !data.customer) return;
+    const customerName = data.customer.company_name || "Cari_Hesap";
     exportToExcel(
       {
         headers: [
@@ -252,7 +253,7 @@ export default function CustomerCariPage() {
           m.balance,
         ]),
       },
-      `Cari_Ekstresi_${data.customer.company_name}`
+      `Cari_Ekstresi_${customerName}`
     );
   };
 
