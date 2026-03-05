@@ -12,15 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Settings, User, Bell, Shield, Database, Loader2, Eye, EyeOff, FileText } from "lucide-react";
+import { Settings, User, Bell, Shield, Database, Loader2, Eye, EyeOff, FileText, Users } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserProfile } from "@/hooks/use-user-profile";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { translateSupabaseError } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { permissions } = useUserProfile();
   const { toast } = useToast();
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -377,6 +379,32 @@ export default function SettingsPage() {
             </Link>
           </CardContent>
         </Card>
+
+        {permissions?.canManageUsers && (
+          <Card className="md:col-span-2 lg:col-span-1 border-red-200 bg-red-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-red-600" />
+                <CardTitle>Kullanıcı Yönetimi</CardTitle>
+              </div>
+              <CardDescription>
+                Sistem kullanıcılarını ekleyin, rollerini düzenleyin veya
+                pasif yapın. Sadece Süper Admin erişebilir.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-sm text-gray-600">
+                Yeni kullanıcı oluşturabilir, mevcut kullanıcıların rollerini
+                değiştirebilir veya hesaplarını yönetebilirsiniz.
+              </p>
+              <Link href="/settings/users">
+                <Button className="w-full bg-logistics-red hover:bg-logistics-red/90">
+                  Kullanıcıları Yönet
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

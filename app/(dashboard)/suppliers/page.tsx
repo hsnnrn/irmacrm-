@@ -45,8 +45,10 @@ import {
 import { useTableFeatures } from "@/hooks/use-table-features";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { useUserProfile } from "@/hooks/use-user-profile";
 
 export default function SuppliersPage() {
+  const { permissions } = useUserProfile();
   const { data: suppliers, isLoading, error } = useSuppliers();
   const deleteSupplier = useDeleteSupplier();
   const { toast } = useToast();
@@ -179,15 +181,17 @@ export default function SuppliersPage() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button
-            onClick={() => {
-              setSelectedSupplier(null);
-              setIsDialogOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Yeni Tedarikçi
-          </Button>
+          {permissions?.canWrite && (
+            <Button
+              onClick={() => {
+                setSelectedSupplier(null);
+                setIsDialogOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Yeni Tedarikçi
+            </Button>
+          )}
         </div>
       </div>
 
@@ -332,38 +336,42 @@ export default function SuppliersPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(supplier)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Düzenle</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDeleteClick(supplier.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Sil</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                      {permissions?.canWrite && (
+                        <>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(supplier)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Düzenle</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDeleteClick(supplier.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Sil</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

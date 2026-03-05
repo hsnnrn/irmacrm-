@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, User, TrendingUp, Loader2 } from "lucide-react";
+import { Bell, User, TrendingUp, Loader2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,10 +16,14 @@ import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { formatExchangeRate } from "@/lib/exchange-rates";
 import { TCMBRatesDialog } from "@/components/business/tcmb-rates-dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserProfile } from "@/hooks/use-user-profile";
+import { ROLE_LABELS, ROLE_COLORS } from "@/lib/rbac";
+import { cn } from "@/lib/utils";
 
 export function Header() {
   const { data: rates, isLoading: ratesLoading } = useExchangeRates();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
+  const { profile, role } = useUserProfile();
   const [tcmbDialogOpen, setTcmbDialogOpen] = useState(false);
 
   return (
@@ -89,12 +93,36 @@ export function Header() {
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" className="relative">
                   <User className="h-5 w-5" />
+                  {role === "SUPER_ADMIN" && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-red-500">
+                      <ShieldCheck className="h-2 w-2 text-white" />
+                    </span>
+                  )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Hesabım</DropdownMenuLabel>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-semibold">
+                      {profile?.full_name || user?.email || "Kullanıcı"}
+                    </span>
+                    <span className="text-xs font-normal text-gray-500">
+                      {user?.email}
+                    </span>
+                    {role && (
+                      <span
+                        className={cn(
+                          "mt-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+                          ROLE_COLORS[role]
+                        )}
+                      >
+                        {ROLE_LABELS[role]}
+                      </span>
+                    )}
+                  </div>
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <Link href="/profile">
                   <DropdownMenuItem>Profil</DropdownMenuItem>

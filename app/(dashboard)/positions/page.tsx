@@ -61,8 +61,10 @@ import {
 import { useTableFeatures } from "@/hooks/use-table-features";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { SortableHeader } from "@/components/ui/sortable-header";
+import { useUserProfile } from "@/hooks/use-user-profile";
 
 export default function PositionsPage() {
+  const { permissions } = useUserProfile();
   const { data: positions, isLoading, error } = usePositions();
   const { data: invoices } = useInvoices();
   const { data: exchangeRates } = useExchangeRates();
@@ -277,12 +279,14 @@ export default function PositionsPage() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Link href="/positions/create">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Yeni Pozisyon
-            </Button>
-          </Link>
+          {permissions?.canWrite && (
+            <Link href="/positions/create">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Yeni Pozisyon
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
