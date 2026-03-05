@@ -1,138 +1,146 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { updatePassword } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { translateSupabaseError } from "@/lib/utils";
-import { Loader2, Eye, EyeOff, Lock, Truck, Shield, Zap, ArrowRight, CheckCircle } from "lucide-react";
+import {
+  Loader2,
+  Eye,
+  EyeOff,
+  Lock,
+  Truck,
+  Shield,
+  Zap,
+  ArrowRight,
+  CheckCircle,
+} from "lucide-react";
 
+// Inner form — reads tokens from both URL hash (#) and query params (?)
 function ResetPasswordForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isValidToken, setIsValidToken] = useState(false);
-  const [tokenError, setTokenError] = useState(false);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
-    let mounted = true;
+    async function initSession() {
+      // 1) Try query params first (PKCE flow: ?code=... or ?access_token=...)
+      const code = searchParams.get("code");
+      const accessTokenParam = searchParams.get("access_token");
+      const refreshTokenParam = searchParams.get("refresh_token");
 
-    const init = async () => {
-      const { supabase } = await import("@/lib/supabase");
+      // 2) Try URL hash (#access_token=...&refresh_token=...&type=recovery)
+      const hash = typeof window !== "undefined"
+        ? window.location.hash.substring(1)
+        : "";
+      const hashParams = new URLSearchParams(hash);
+      const accessTokenHash = hashParams.get("access_token");
+      const refreshTokenHash = hashParams.get("refresh_token");
 
-      // Supabase sends tokens as URL hash (#access_token=...&type=recovery)
-      // detectSessionInUrl: true automatically picks these up and fires onAuthStateChange
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((event, session) => {
-        if (!mounted) return;
-        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-          setIsValidToken(true);
+      const accessToken = accessTokenParam || accessTokenHash;
+      const refreshToken = refreshTokenParam || refreshTokenHash;
+
+      // Case A: PKCE exchange code
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setStatus("error");
+          return;
         }
-      });
-
-      // Also check if there's already a session (tokens may already be processed)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (mounted && session) {
-        setIsValidToken(true);
+        setStatus("ready");
+        return;
       }
 
-      // If no token found after 6 seconds, show error
-      const timer = setTimeout(() => {
-        if (mounted) {
-          setTokenError(true);
+      // Case B: Direct tokens in URL (hash or query)
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (error) {
+          setStatus("error");
+          return;
         }
-      }, 6000);
+        // Clean the hash from the URL bar
+        if (typeof window !== "undefined" && window.location.hash) {
+          window.history.replaceState(null, "", window.location.pathname);
+        }
+        setStatus("ready");
+        return;
+      }
 
-      return () => {
-        subscription.unsubscribe();
-        clearTimeout(timer);
-      };
-    };
+      // Case C: Supabase already processed the hash automatically (detectSessionInUrl)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setStatus("ready");
+        return;
+      }
 
-    const cleanup = init();
-
-    return () => {
-      mounted = false;
-      cleanup.then((fn) => fn?.());
-    };
-  }, []);
-
-  // Password validation
-  const validatePassword = (password: string) => {
-    if (!password) {
-      return "Şifre gereklidir";
+      // Nothing worked
+      setStatus("error");
     }
-    if (password.length < 6) {
-      return "Şifre en az 6 karakter olmalıdır";
-    }
+
+    initSession();
+  }, [searchParams]);
+
+  const validatePassword = (val: string) => {
+    if (!val) return "Şifre gereklidir";
+    if (val.length < 6) return "Şifre en az 6 karakter olmalıdır";
     return "";
   };
 
-  const validateConfirmPassword = (confirmPassword: string, password: string) => {
-    if (!confirmPassword) {
-      return "Şifre tekrarı gereklidir";
-    }
-    if (confirmPassword !== password) {
-      return "Şifreler eşleşmiyor";
-    }
+  const validateConfirmPassword = (confirm: string, pass: string) => {
+    if (!confirm) return "Şifre tekrarı gereklidir";
+    if (confirm !== pass) return "Şifreler eşleşmiyor";
     return "";
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setPassword(value);
-    const error = validatePassword(value);
-    setPasswordError(error);
-
-    // Also validate confirm password if it exists
+    const val = e.target.value;
+    setPassword(val);
+    setPasswordError(validatePassword(val));
     if (confirmPassword) {
-      const confirmError = validateConfirmPassword(confirmPassword, value);
-      setConfirmPasswordError(confirmError);
+      setConfirmPasswordError(validateConfirmPassword(confirmPassword, val));
     }
   };
 
   const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setConfirmPassword(value);
-    const error = validateConfirmPassword(value, password);
-    setConfirmPasswordError(error);
+    const val = e.target.value;
+    setConfirmPassword(val);
+    setConfirmPasswordError(validateConfirmPassword(val, password));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const passwordErr = validatePassword(password);
-    const confirmErr = validateConfirmPassword(confirmPassword, password);
-
-    setPasswordError(passwordErr);
-    setConfirmPasswordError(confirmErr);
-
-    if (passwordErr || confirmErr) {
-      return;
-    }
+    const pErr = validatePassword(password);
+    const cErr = validateConfirmPassword(confirmPassword, password);
+    setPasswordError(pErr);
+    setConfirmPasswordError(cErr);
+    if (pErr || cErr) return;
 
     setLoading(true);
     try {
-      await updatePassword(password);
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
       toast({
         title: "Şifre güncellendi!",
         description: "Şifreniz başarıyla güncellendi. Şimdi giriş yapabilirsiniz.",
       });
+      await supabase.auth.signOut();
       router.push("/auth/login");
     } catch (error: any) {
       toast({
@@ -145,32 +153,46 @@ function ResetPasswordForm() {
     }
   };
 
-  if (!isValidToken) {
+  /* ---------- LOADING ---------- */
+  if (status === "loading") {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-        {tokenError ? (
-          <div className="text-center space-y-4 px-6 max-w-sm">
-            <p className="text-white text-lg font-semibold">Geçersiz veya süresi dolmuş bağlantı</p>
-            <p className="text-slate-300 text-sm">
-              Şifre sıfırlama bağlantısı geçersiz. Lütfen tekrar şifre sıfırlama isteği gönderin.
-            </p>
-            <Button
-              onClick={() => router.push("/auth/login")}
-              className="bg-white text-slate-900 hover:bg-slate-100"
-            >
-              Giriş Sayfasına Dön
-            </Button>
-          </div>
-        ) : (
-          <Loader2 className="h-8 w-8 animate-spin text-white" />
-        )}
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+        <div className="text-center space-y-3">
+          <Loader2 className="h-10 w-10 animate-spin text-white mx-auto" />
+          <p className="text-slate-300 text-sm">Bağlantı doğrulanıyor...</p>
+        </div>
       </div>
     );
   }
 
+  /* ---------- ERROR ---------- */
+  if (status === "error") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 px-6">
+        <div className="text-center space-y-4 max-w-sm">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/20 border border-red-400/30 mx-auto">
+            <Lock className="h-8 w-8 text-red-400" />
+          </div>
+          <h2 className="text-white text-xl font-bold">Geçersiz veya Süresi Dolmuş Bağlantı</h2>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.
+            Lütfen tekrar şifre sıfırlama talebinde bulunun.
+          </p>
+          <Button
+            onClick={() => router.push("/auth/login")}
+            className="bg-white text-slate-900 hover:bg-slate-100 w-full"
+          >
+            Giriş Sayfasına Dön
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------- FORM ---------- */
   return (
     <div className="flex min-h-screen bg-white">
-      {/* Left Side - Reset Password Form */}
+      {/* Left Side */}
       <div className="flex w-full flex-col items-center justify-center bg-white px-6 py-12 lg:w-1/2 lg:px-12">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -184,24 +206,18 @@ function ResetPasswordForm() {
               <Truck className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
-                İRMA GLOBAL
-              </h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">İRMA GLOBAL</h1>
               <p className="text-xs text-slate-500">FORWARDING</p>
             </div>
           </div>
 
-          {/* Welcome Text */}
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-slate-900">Yeni Şifre Belirleyin</h2>
-            <p className="mt-2 text-slate-600">
-              Güvenli bir şifre seçerek hesabınızı koruyun
-            </p>
+            <p className="mt-2 text-slate-600">Güvenli bir şifre seçerek hesabınızı koruyun</p>
           </div>
 
-          {/* Reset Password Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* New Password Input */}
+            {/* New Password */}
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium text-slate-700">
                 Yeni Şifre
@@ -224,19 +240,13 @@ function ResetPasswordForm() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
-              {passwordError && (
-                <p className="text-sm text-red-600">{passwordError}</p>
-              )}
+              {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
             </div>
 
-            {/* Confirm Password Input */}
+            {/* Confirm Password */}
             <div className="space-y-2">
               <Label htmlFor="confirmPassword" className="text-sm font-medium text-slate-700">
                 Şifre Tekrarı
@@ -259,11 +269,7 @@ function ResetPasswordForm() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-600"
                 >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
               {confirmPasswordError && (
@@ -271,10 +277,9 @@ function ResetPasswordForm() {
               )}
             </div>
 
-            {/* Submit Button */}
             <Button
               type="submit"
-              className="h-12 w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-sm font-semibold text-white shadow-lg transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50"
+              className="h-12 w-full rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-sm font-semibold text-white shadow-lg transition-all hover:from-blue-700 hover:to-blue-800 hover:shadow-xl disabled:opacity-50"
               disabled={loading || !!passwordError || !!confirmPasswordError}
             >
               {loading ? (
@@ -291,16 +296,14 @@ function ResetPasswordForm() {
             </Button>
           </form>
 
-          {/* Footer */}
           <p className="mt-8 text-center text-xs text-slate-500">
             © {new Date().getFullYear()} İrma Global Forwarding. Tüm hakları saklıdır.
           </p>
         </motion.div>
       </div>
 
-      {/* Right Side - Branding Area */}
+      {/* Right Side Branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-12 relative overflow-hidden">
-        {/* Pattern Overlay */}
         <div
           className="absolute inset-0 opacity-[0.03]"
           style={{
@@ -308,11 +311,8 @@ function ResetPasswordForm() {
             backgroundSize: "40px 40px",
           }}
         />
-
-        {/* Decorative Circles */}
         <div className="absolute -left-32 top-1/4 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
         <div className="absolute -right-32 bottom-1/3 h-96 w-96 rounded-full bg-blue-400/20 blur-3xl" />
-        <div className="absolute bottom-20 left-1/4 h-48 w-48 rounded-full bg-orange-500/10 blur-2xl" />
 
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -320,45 +320,37 @@ function ResetPasswordForm() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="relative z-10 max-w-lg space-y-8"
         >
-          {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20">
               <Truck className="h-8 w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white">
-                İRMA GLOBAL
-              </h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">İRMA GLOBAL</h1>
               <p className="text-sm text-slate-300">FORWARDING</p>
             </div>
           </div>
 
-          {/* Message */}
           <div className="space-y-4">
-            <h2 className="text-4xl font-bold leading-tight text-white">
-              Güvenli Şifre Yönetimi
-            </h2>
+            <h2 className="text-4xl font-bold leading-tight text-white">Güvenli Şifre Yönetimi</h2>
             <p className="text-lg text-slate-300 leading-relaxed">
               Şifrenizi düzenli olarak güncelleyin ve güçlü parola kurallarına uyun.
-              Hesabınızın güvenliği bizim önceliğimiz.
             </p>
           </div>
 
-          {/* Security Tips */}
           <ul className="flex flex-col gap-4 pt-4">
             {[
-              { icon: Shield, label: "Güçlü şifre", desc: "En az 6 karakter, karmaşık kombinasyon" },
+              { icon: Shield, label: "Güçlü şifre", desc: "En az 6 karakter kullanın" },
               { icon: Zap, label: "Düzenli güncelleme", desc: "Şifrenizi periyodik olarak değiştirin" },
               { icon: Lock, label: "Gizli tutun", desc: "Şifrenizi kimseyle paylaşmayın" },
-            ].map(({ icon: Icon, label, desc }, index) => (
+            ].map(({ icon: Icon, label, desc }, i) => (
               <motion.li
                 key={label}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 + index * 0.1 }}
+                transition={{ duration: 0.5, delay: 0.4 + i * 0.1 }}
                 className="flex items-start gap-3 text-slate-300"
               >
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 backdrop-blur-sm border border-blue-400/30">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 border border-blue-400/30">
                   <Icon className="h-5 w-5 text-blue-400" />
                 </div>
                 <div>
@@ -370,7 +362,6 @@ function ResetPasswordForm() {
           </ul>
         </motion.div>
 
-        {/* Bottom Copyright */}
         <p className="absolute bottom-8 left-12 text-xs text-slate-500">
           © {new Date().getFullYear()} İrma Global Forwarding
         </p>
