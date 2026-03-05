@@ -76,7 +76,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signIn(email, password);
-      router.push("/");
     } catch {
       // useAuth signIn zaten toast ile hata gösteriyor
     } finally {
