@@ -20,6 +20,7 @@ export type Permission = {
   canManageUsers: boolean;
   canWrite: boolean;
   canViewCustomerFinance: boolean;
+  canEditCustomers: boolean;
 };
 
 export function normalizeRole(role: unknown): UserRole {
@@ -40,6 +41,7 @@ export function getPermissions(role: UserRole): Permission {
         canManageUsers: true,
         canWrite: true,
         canViewCustomerFinance: true,
+        canEditCustomers: true,
       };
     case "EMPLOYEE":
       return {
@@ -49,6 +51,7 @@ export function getPermissions(role: UserRole): Permission {
         canManageUsers: false,
         canWrite: true,
         canViewCustomerFinance: false,
+        canEditCustomers: false,
       };
     case "READ_ONLY":
       return {
@@ -58,6 +61,7 @@ export function getPermissions(role: UserRole): Permission {
         canManageUsers: false,
         canWrite: false,
         canViewCustomerFinance: true,
+        canEditCustomers: false,
       };
   }
 }

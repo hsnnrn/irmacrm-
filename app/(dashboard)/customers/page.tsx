@@ -198,7 +198,7 @@ export default function CustomersPage() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {permissions?.canWrite && (
+          {permissions?.canEditCustomers && (
             <Button
               onClick={() => {
                 setSelectedCustomer(null);
@@ -380,7 +380,7 @@ export default function CustomersPage() {
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                        {permissions?.canWrite && (
+                        {permissions?.canEditCustomers && (
                           <>
                             <TooltipProvider>
                               <Tooltip>

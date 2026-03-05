@@ -28,8 +28,10 @@ import { computeProfitFromInvoices, computeMonthlyProfitFromInvoices } from "@/l
 import { formatCurrency } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { CurrencyCard } from "@/components/ui/currency-card";
+import { useUserProfile } from "@/hooks/use-user-profile";
 
 export default function DashboardPage() {
+  const { permissions } = useUserProfile();
   const { data: positions, isLoading: positionsLoading } = usePositions();
   const { data: invoices, isLoading: invoicesLoading } = useInvoices();
   const { data: exchangeRates } = useExchangeRates();
@@ -224,7 +226,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-4 md:grid-cols-2 ${permissions?.canViewFinance ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {/* Aktif Pozisyonlar */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -243,16 +245,18 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Bu Ay Kar - Clickable Currency Card */}
-        <CurrencyCard
-          title="Bu Ay Kar"
-          description="Bu Ay Kar"
-          amount={stats.thisMonthProfit.value}
-          originalCurrency="TRY"
-          icon={<DollarSign className="h-4 w-4 text-green-600" />}
-          className="border-green-200 bg-green-50"
-          titleClassName="text-green-600"
-        />
+        {/* Bu Ay Kar - sadece finans yetkisi olanlar görür */}
+        {permissions?.canViewFinance && (
+          <CurrencyCard
+            title="Bu Ay Kar"
+            description="Bu Ay Kar"
+            amount={stats.thisMonthProfit.value}
+            originalCurrency="TRY"
+            icon={<DollarSign className="h-4 w-4 text-green-600" />}
+            className="border-green-200 bg-green-50"
+            titleClassName="text-green-600"
+          />
+        )}
 
         {/* Yoldaki Araçlar */}
         <Card>
@@ -409,33 +413,35 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Monthly Profit Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Aylık Karlılık</CardTitle>
-            <CardDescription>Son 6 aylık kar trendi</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {monthlyProfitability.map((data) => (
-                <div key={data.month} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{data.month}</span>
-                    <span className="text-gray-600">
-                      {formatCurrency(data.value, "TRY")}
-                    </span>
+        {/* Aylık Karlılık - sadece finans yetkisi olanlar görür */}
+        {permissions?.canViewFinance && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Aylık Karlılık</CardTitle>
+              <CardDescription>Son 6 aylık kar trendi</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {monthlyProfitability.map((data) => (
+                  <div key={data.month} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{data.month}</span>
+                      <span className="text-gray-600">
+                        {formatCurrency(data.value, "TRY")}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-600"
+                        style={{ width: `${data.percent}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-600"
-                      style={{ width: `${data.percent}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
