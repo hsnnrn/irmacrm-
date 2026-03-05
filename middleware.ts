@@ -24,8 +24,7 @@ export function middleware(request: NextRequest) {
   }
 
   const supabaseAuthToken =
-    request.cookies.get("sb-a4c25270-bb57-4bcc-bc65-7605e1c573ca-auth-token")
-      ?.value ||
+    request.cookies.get("sb-icabzkuxkzjfquydocqz-auth-token")?.value ||
     request.cookies.get("supabase-auth-token")?.value ||
     findSupabaseAuthCookie(request);
 

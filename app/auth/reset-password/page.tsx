@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,43 +18,59 @@ function ResetPasswordForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isValidToken, setIsValidToken] = useState(false);
+  const [tokenError, setTokenError] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [confirmPasswordError, setConfirmPasswordError] = useState("");
 
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Check if we have the required tokens from URL
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
+    let mounted = true;
 
-    if (accessToken && refreshToken) {
-      // Set the session with the tokens from URL
-      import('@/lib/supabase').then(({ supabase }) => {
-        supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken,
-        }).then(({ error }) => {
-          if (error) {
-            console.error('Error setting session:', error);
-            toast({
-              title: "Geçersiz bağlantı",
-              description: "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
-              variant: "destructive",
-            });
-            router.push('/auth/login');
-          } else {
-            setIsValidToken(true);
-          }
-        });
+    const init = async () => {
+      const { supabase } = await import("@/lib/supabase");
+
+      // Supabase sends tokens as URL hash (#access_token=...&type=recovery)
+      // detectSessionInUrl: true automatically picks these up and fires onAuthStateChange
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        if (!mounted) return;
+        if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
+          setIsValidToken(true);
+        }
       });
-    } else {
-      // No tokens in URL, redirect to login
-      router.push('/auth/login');
-    }
-  }, [searchParams, router, toast]);
+
+      // Also check if there's already a session (tokens may already be processed)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted && session) {
+        setIsValidToken(true);
+      }
+
+      // If no token found after 6 seconds, show error
+      const timer = setTimeout(() => {
+        if (mounted) {
+          setTokenError(true);
+        }
+      }, 6000);
+
+      return () => {
+        subscription.unsubscribe();
+        clearTimeout(timer);
+      };
+    };
+
+    const cleanup = init();
+
+    return () => {
+      mounted = false;
+      cleanup.then((fn) => fn?.());
+    };
+  }, []);
 
   // Password validation
   const validatePassword = (password: string) => {
@@ -131,8 +147,23 @@ function ResetPasswordForm() {
 
   if (!isValidToken) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+        {tokenError ? (
+          <div className="text-center space-y-4 px-6 max-w-sm">
+            <p className="text-white text-lg font-semibold">Geçersiz veya süresi dolmuş bağlantı</p>
+            <p className="text-slate-300 text-sm">
+              Şifre sıfırlama bağlantısı geçersiz. Lütfen tekrar şifre sıfırlama isteği gönderin.
+            </p>
+            <Button
+              onClick={() => router.push("/auth/login")}
+              className="bg-white text-slate-900 hover:bg-slate-100"
+            >
+              Giriş Sayfasına Dön
+            </Button>
+          </div>
+        ) : (
+          <Loader2 className="h-8 w-8 animate-spin text-white" />
+        )}
       </div>
     );
   }
