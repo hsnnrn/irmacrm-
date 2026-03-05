@@ -1051,17 +1051,31 @@ export default function PositionDetailPage({
                   
                   // Calculate profit in TRY (always use TRY for accurate calculation)
                   const salesInTry = salesPrice * salesRate;
-                  const costInTry = costPrice * costRate;
-                  let profitInTry = salesInTry - costInTry;
+                  let costInTry = costPrice * costRate;
                   
-                  // Subtract payments from profit (convert all payments to TRY)
+                  // ADVANCE and DRIVER_EXPENSE are part of cost, add them to costInTry
+                  // Other payment types (FUEL, TOLL, PARKING, OTHER) are deducted from profit
                   if (paymentsData && paymentsData.length > 0) {
-                    const totalPaymentsInTry = paymentsData.reduce((sum: number, payment: any) => {
+                    paymentsData.forEach((payment: any) => {
                       const paymentRate = payment.exchange_rate || 1;
                       const paymentInTry = payment.amount * paymentRate;
-                      return sum + paymentInTry;
-                    }, 0);
-                    profitInTry -= totalPaymentsInTry;
+                      if (payment.payment_type === "ADVANCE" || payment.payment_type === "DRIVER_EXPENSE") {
+                        costInTry += paymentInTry;
+                      }
+                    });
+                  }
+
+                  let profitInTry = salesInTry - costInTry;
+
+                  // Subtract non-cost payments from profit
+                  if (paymentsData && paymentsData.length > 0) {
+                    paymentsData.forEach((payment: any) => {
+                      const paymentRate = payment.exchange_rate || 1;
+                      const paymentInTry = payment.amount * paymentRate;
+                      if (payment.payment_type !== "ADVANCE" && payment.payment_type !== "DRIVER_EXPENSE") {
+                        profitInTry -= paymentInTry;
+                      }
+                    });
                   }
                   
                   // Calculate profit margin in TRY
