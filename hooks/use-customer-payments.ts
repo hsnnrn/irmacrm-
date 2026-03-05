@@ -1,9 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 
-type CustomerPayment = {
+export type CustomerMovementType = "BORC" | "ALACAK";
+
+export type CustomerPayment = {
   id: string;
   customer_id: string;
+  movement_type: CustomerMovementType;
   description: string | null;
   invoice_no: string | null;
   amount: number;
@@ -16,6 +19,7 @@ type CustomerPayment = {
 type CustomerPaymentInsert = {
   id?: string;
   customer_id: string;
+  movement_type?: CustomerMovementType;
   description?: string | null;
   invoice_no?: string | null;
   amount: number;

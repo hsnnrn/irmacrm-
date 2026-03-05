@@ -66,27 +66,8 @@ export default function CustomerCariPage() {
     );
     const payments = data?.payments || [];
     const previousYearBalance = data?.customer?.previous_year_balance || 0;
-    const openingBalance = previousYearBalance;
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
-
-    // Toplam Borç: önce devir bakiye, sonra faturalar veya sefer satış tutarları
-    const totalFromInvoices = salesInvoices.reduce(
-      (sum, inv) => sum + toCustomerCurrency(inv.amount, inv.currency),
-      0
-    );
-    const totalFromPositions = pos.reduce((sum, p) => {
-      const price = p.sales_price || 0;
-      const fromCur = (p.sales_currency as string) || currency;
-      return sum + toCustomerCurrency(price, fromCur);
-    }, 0);
-    const totalReceivable =
-      openingBalance + (salesInvoices.length > 0 ? totalFromInvoices : totalFromPositions);
-    const totalReceived = payments.reduce(
-      (sum, p) => sum + toCustomerCurrency(p.amount, p.currency),
-      0
-    );
-    const balance = totalReceivable - totalReceived;
 
     type RawMovement = {
       date: Date;
@@ -99,47 +80,73 @@ export default function CustomerCariPage() {
 
     const items: RawMovement[] = [];
 
-    // Borç hareketleri (Satış faturaları)
-    salesInvoices.forEach((inv) => {
-      const amt = toCustomerCurrency(inv.amount, inv.currency);
-      const position = pos.find((p) => p.id === inv.position_id);
-      const posLabel = position ? `Poz #${position.position_no}` : "";
-      const routeDesc = position
-        ? `${position.loading_point} → ${position.unloading_point}`
-        : "";
-      const statusLabel =
-        STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
-        position?.status ||
-        "-";
-
-      const desc = position
-        ? `${posLabel} - ${routeDesc} - Satış Faturası`
-        : "Satış Faturası";
-
-      items.push({
-        date: new Date(inv.invoice_date),
-        docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
-        type: "BORC",
-        description: desc,
-        amount: amt,
-        status: statusLabel,
+    // Borç: Satış faturaları varsa onlar, yoksa pozisyon satış tutarları
+    if (salesInvoices.length > 0) {
+      salesInvoices.forEach((inv) => {
+        const amt = toCustomerCurrency(inv.amount, inv.currency);
+        const position = pos.find((p) => p.id === inv.position_id);
+        const posLabel = position ? `Poz #${position.position_no}` : "";
+        const routeDesc = position
+          ? `${position.loading_point} → ${position.unloading_point}`
+          : "";
+        const statusLabel =
+          STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
+          position?.status ||
+          "-";
+        const desc = position
+          ? `${posLabel} - ${routeDesc} - Satış Faturası`
+          : "Satış Faturası";
+        items.push({
+          date: new Date(inv.invoice_date),
+          docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
+          type: "BORC",
+          description: desc,
+          amount: amt,
+          status: statusLabel,
+        });
       });
-    });
+    } else {
+      // Fatura girilmemişse pozisyon satış tutarları otomatik BORÇ hareketi olarak göster
+      pos.forEach((position) => {
+        const price = position.sales_price || 0;
+        if (price > 0) {
+          const fromCur = (position.sales_currency as string) || currency;
+          const amt = toCustomerCurrency(price, fromCur);
+          const statusLabel =
+            STATUS_LABELS[position.status as keyof typeof STATUS_LABELS] ||
+            position.status ||
+            "-";
+          items.push({
+            date: new Date(position.created_at),
+            docNo: `Poz #${position.position_no}`,
+            type: "BORC",
+            description: `Poz #${position.position_no} - ${position.loading_point} → ${position.unloading_point} - Satış Tutarı`,
+            amount: amt,
+            status: statusLabel,
+          });
+        }
+      });
+    }
 
-    // Alacak hareketleri (müşteri ödemeleri)
+    // Manuel cari hareketler: movement_type'a göre BORÇ veya ALACAK
     payments.forEach((p) => {
       const amt = toCustomerCurrency(p.amount, p.currency);
-      const statusLabel = "Ödeme";
-      const docNo = p.invoice_no || `OD-${p.id.slice(0, 8)}`;
-      const desc = p.description || "Müşteri Ödemesi";
-
+      // Geriye dönük uyumluluk: movement_type yoksa ALACAK varsay
+      const movType: "BORC" | "ALACAK" = (p.movement_type as "BORC" | "ALACAK") || "ALACAK";
+      const defaultDesc =
+        movType === "ALACAK" ? "Müşteri Ödemesi" : "Manuel Borç Girişi";
+      const docNo =
+        p.invoice_no ||
+        (movType === "ALACAK"
+          ? `OD-${p.id.slice(0, 8)}`
+          : `MB-${p.id.slice(0, 8)}`);
       items.push({
         date: new Date(p.payment_date),
         docNo,
-        type: "ALACAK",
-        description: desc,
+        type: movType,
+        description: p.description || defaultDesc,
         amount: amt,
-        status: statusLabel,
+        status: movType === "ALACAK" ? "Ödeme" : "Manuel Borç",
       });
     });
 
@@ -148,12 +155,25 @@ export default function CustomerCariPage() {
       BORC: 0,
       ALACAK: 1,
     };
-
     items.sort((a, b) => {
       const diff = a.date.getTime() - b.date.getTime();
       if (diff !== 0) return diff;
       return typeOrder[a.type] - typeOrder[b.type];
     });
+
+    // BAKİYE = BORÇ - ALACAK
+    // Devreden bakiye: pozitif → borçlu (BORÇ), negatif → alacaklı (ALACAK)
+    const openingBorc = previousYearBalance > 0 ? previousYearBalance : 0;
+    const openingAlacak = previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0;
+    const borcFromItems = items
+      .filter((m) => m.type === "BORC")
+      .reduce((sum, m) => sum + m.amount, 0);
+    const alacakFromItems = items
+      .filter((m) => m.type === "ALACAK")
+      .reduce((sum, m) => sum + m.amount, 0);
+    const totalBorc = openingBorc + borcFromItems;
+    const totalAlacak = openingAlacak + alacakFromItems;
+    const balance = totalBorc - totalAlacak;
 
     const moveList: {
       date: string;
@@ -165,7 +185,8 @@ export default function CustomerCariPage() {
       balance: number;
       status: string;
     }[] = [];
-    let runningBalance = openingBalance;
+
+    let runningBalance = previousYearBalance;
 
     if (previousYearBalance !== 0) {
       moveList.push({
@@ -173,19 +194,19 @@ export default function CustomerCariPage() {
         docNo: "-",
         type: previousYearBalance >= 0 ? "BORC" : "ALACAK",
         description: "Devreden Bakiye",
-        borc: previousYearBalance > 0 ? previousYearBalance : 0,
-        alacak: previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0,
+        borc: openingBorc,
+        alacak: openingAlacak,
         balance: runningBalance,
         status: "-",
       });
     }
+
     items.forEach((item) => {
       if (item.type === "BORC") {
         runningBalance += item.amount;
       } else {
         runningBalance -= item.amount;
       }
-
       moveList.push({
         date: formatDate(item.date),
         docNo: item.docNo,
@@ -201,11 +222,7 @@ export default function CustomerCariPage() {
     return {
       positions: pos,
       movements: moveList,
-      summary: {
-        totalReceivable,
-        totalReceived,
-        balance,
-      },
+      summary: { totalBorc, totalAlacak, balance },
     };
   }, [data, currency, exchangeRates]);
 
@@ -225,7 +242,11 @@ export default function CustomerCariPage() {
         balance: m.balance,
         status: m.status,
       })),
-      summary,
+      summary: {
+        totalReceivable: summary.totalBorc,
+        totalReceived: summary.totalAlacak,
+        balance: summary.balance,
+      },
     });
   };
 
@@ -355,8 +376,8 @@ export default function CustomerCariPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Toplam Borç</CardDescription>
-            <CardTitle className="text-xl">
-              {formatCurrency(summary.totalReceivable, currency)}
+            <CardTitle className="text-xl text-red-600">
+              {formatCurrency(summary.totalBorc, currency)}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -364,7 +385,7 @@ export default function CustomerCariPage() {
           <CardHeader className="pb-2">
             <CardDescription>Toplam Alacak (Tahsilat)</CardDescription>
             <CardTitle className="text-xl text-emerald-600">
-              {formatCurrency(summary.totalReceived, currency)}
+              {formatCurrency(summary.totalAlacak, currency)}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -373,11 +394,22 @@ export default function CustomerCariPage() {
             <CardDescription>Kalan Bakiye</CardDescription>
             <CardTitle
               className={`text-xl ${
-                summary.balance > 0 ? "text-amber-600" : "text-gray-700"
+                summary.balance > 0
+                  ? "text-amber-600"
+                  : summary.balance < 0
+                  ? "text-emerald-600"
+                  : "text-gray-700"
               }`}
             >
               {formatCurrency(summary.balance, currency)}
             </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {summary.balance > 0
+                ? "Müşteri borçlu"
+                : summary.balance < 0
+                ? "Müşteriden alacaklıyız"
+                : "Bakiye sıfır"}
+            </p>
           </CardHeader>
         </Card>
       </div>

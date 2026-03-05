@@ -16,9 +16,12 @@ type Invoice = {
   created_at: string;
 };
 
+export type CustomerMovementType = "BORC" | "ALACAK";
+
 type CustomerPayment = {
   id: string;
   customer_id: string;
+  movement_type: CustomerMovementType;
   description: string | null;
   invoice_no: string | null;
   amount: number;

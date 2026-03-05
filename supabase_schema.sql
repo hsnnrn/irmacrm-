@@ -1,16 +1,15 @@
 -- 1. Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- 2. ENUM Types (Standartlaştırma için)
 CREATE TYPE position_status AS ENUM ('DRAFT', 'READY_TO_DEPART', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'CANCELLED');
 CREATE TYPE currency_code AS ENUM ('TRY', 'USD', 'EUR', 'RUB');
 CREATE TYPE doc_type AS ENUM ('DRIVER_LICENSE', 'VEHICLE_LICENSE', 'INSURANCE', 'TRANSPORT_CONTRACT', 'CMR', 'SALES_INVOICE', 'PURCHASE_INVOICE');
+CREATE TYPE user_role AS ENUM ('SUPER_ADMIN', 'EMPLOYEE', 'READ_ONLY');
 
--- 3. Profiles (Users)
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
   full_name TEXT,
-  role TEXT DEFAULT 'OPERATOR' CHECK (role IN ('ADMIN', 'OPERATOR', 'VIEWER')),
+  role user_role NOT NULL DEFAULT 'EMPLOYEE',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -109,6 +108,29 @@ CREATE TABLE invoices (
   is_paid BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- 10. Customer Payments / Manuel Cari Hareketler
+-- movement_type: 'BORC' = müşteri borçlanır (satış faturası, sefer vb.)
+--                'ALACAK' = müşteri ödeme yapar (tahsilat, müşteri faturası)
+CREATE TABLE IF NOT EXISTS customer_payments (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  customer_id UUID REFERENCES customers(id) ON DELETE CASCADE NOT NULL,
+  movement_type TEXT CHECK (movement_type IN ('BORC', 'ALACAK')) NOT NULL DEFAULT 'ALACAK',
+  description TEXT,
+  invoice_no TEXT,
+  amount DECIMAL(15,2) NOT NULL,
+  currency currency_code NOT NULL DEFAULT 'TRY',
+  payment_date DATE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Mevcut kurulumlar için migration: movement_type kolonu ekle
+ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS movement_type TEXT CHECK (movement_type IN ('BORC', 'ALACAK')) NOT NULL DEFAULT 'ALACAK';
+
+ALTER TABLE customer_payments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable all access for authenticated users" ON customer_payments
+FOR ALL USING (auth.role() = 'authenticated');
 
 -- Row Level Security (RLS) - Basic Setup
 ALTER TABLE positions ENABLE ROW LEVEL SECURITY;

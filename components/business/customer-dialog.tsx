@@ -67,6 +67,7 @@ export function CustomerDialog({
     payment_date: new Date().toISOString().slice(0, 10),
     amount: "",
     currency: "TRY" as AccountCurrency,
+    movement_type: "ALACAK" as "BORC" | "ALACAK",
     invoice_no: "",
     description: "",
   });
@@ -110,6 +111,7 @@ export function CustomerDialog({
         customer_id: customer.id,
         amount,
         currency: paymentForm.currency,
+        movement_type: paymentForm.movement_type,
         invoice_no: paymentForm.invoice_no || null,
         description: paymentForm.description || null,
         payment_date:
@@ -121,6 +123,7 @@ export function CustomerDialog({
         amount: "",
         invoice_no: "",
         description: "",
+        movement_type: "ALACAK",
       }));
       toast({
         title: "Ödeme eklendi",
@@ -224,12 +227,11 @@ export function CustomerDialog({
               <div className="mt-2 border-t pt-4 space-y-3">
                 <div>
                   <p className="text-sm font-medium">
-                    Cari Ödeme Girişi (Müşteriden Tahsilat)
+                    Manuel Cari Hareket Girişi
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Bu alandan müşteriden alınan ödemeleri girebilirsiniz. Girdiğiniz
-                    ödemeler cari ekstresine <strong>Alacak</strong> (tahsilat) olarak
-                    yansır.
+                    <strong>Alacak:</strong> Müşteri ödeme yaptı / müşteri faturası kesti. &nbsp;
+                    <strong>Borç:</strong> Müşteriye fatura kesildi veya manuel borç girişi.
                   </p>
                 </div>
                 <div className="grid grid-cols-4 gap-3 items-end">
@@ -264,7 +266,7 @@ export function CustomerDialog({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>Ödeme Dövizi</Label>
+                    <Label>Döviz</Label>
                     <Select
                       value={paymentForm.currency}
                       onValueChange={(value) =>
@@ -287,6 +289,28 @@ export function CustomerDialog({
                     </Select>
                   </div>
                   <div className="space-y-1">
+                    <Label>Hareket Türü</Label>
+                    <Select
+                      value={paymentForm.movement_type}
+                      onValueChange={(value) =>
+                        setPaymentForm({
+                          ...paymentForm,
+                          movement_type: value as "BORC" | "ALACAK",
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALACAK">ALACAK (Ödeme / Tahsilat)</SelectItem>
+                        <SelectItem value="BORC">BORÇ (Fatura / Manuel)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
                     <Label htmlFor="invoice_no">Fatura / Makbuz No</Label>
                     <Input
                       id="invoice_no"
@@ -299,19 +323,19 @@ export function CustomerDialog({
                       }
                     />
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="payment_description">Açıklama</Label>
-                  <Input
-                    id="payment_description"
-                    value={paymentForm.description}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        description: e.target.value,
-                      })
-                    }
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="payment_description">Açıklama</Label>
+                    <Input
+                      id="payment_description"
+                      value={paymentForm.description}
+                      onChange={(e) =>
+                        setPaymentForm({
+                          ...paymentForm,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
@@ -328,21 +352,21 @@ export function CustomerDialog({
                     {createPayment.isPending && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Ödeme Ekle
+                    Hareket Ekle
                   </Button>
                 </div>
 
                 {payments && payments.length > 0 && (
                   <div className="mt-2 rounded-md border bg-muted/40">
                     <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                      Son Ödemeler
+                      Son Cari Hareketler
                     </div>
                     <div className="max-h-40 overflow-auto text-xs">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b">
                             <th className="px-3 py-1 text-left">Tarih</th>
-                            <th className="px-3 py-1 text-left">Fatura No</th>
+                            <th className="px-3 py-1 text-left">Tür</th>
                             <th className="px-3 py-1 text-right">Tutar</th>
                             <th className="px-3 py-1 text-left">Döviz</th>
                             <th className="px-3 py-1 text-left">Açıklama</th>
@@ -350,39 +374,48 @@ export function CustomerDialog({
                           </tr>
                         </thead>
                         <tbody>
-                          {payments.map((p) => (
-                            <tr key={p.id} className="border-b last:border-0">
-                              <td className="px-3 py-1">
-                                {p.payment_date}
-                              </td>
-                              <td className="px-3 py-1">
-                                {p.invoice_no || "-"}
-                              </td>
-                              <td className="px-3 py-1 text-right">
-                                {p.amount.toLocaleString("tr-TR", {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
-                              </td>
-                              <td className="px-3 py-1">{p.currency}</td>
-                              <td className="px-3 py-1 truncate max-w-[160px]">
-                                {p.description || "-"}
-                              </td>
-                              <td className="px-3 py-1 text-right">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 text-xs"
-                                  onClick={() => handleDeletePayment(p.id)}
-                                  disabled={deletePayment.isPending}
-                                  title="Sil"
-                                >
-                                  ×
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
+                          {payments.map((p) => {
+                            const movType = (p as any).movement_type || "ALACAK";
+                            return (
+                              <tr key={p.id} className="border-b last:border-0">
+                                <td className="px-3 py-1">{p.payment_date}</td>
+                                <td className="px-3 py-1">
+                                  <span
+                                    className={`font-semibold ${
+                                      movType === "BORC"
+                                        ? "text-red-600"
+                                        : "text-emerald-600"
+                                    }`}
+                                  >
+                                    {movType}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-1 text-right">
+                                  {p.amount.toLocaleString("tr-TR", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </td>
+                                <td className="px-3 py-1">{p.currency}</td>
+                                <td className="px-3 py-1 truncate max-w-[160px]">
+                                  {p.description || p.invoice_no || "-"}
+                                </td>
+                                <td className="px-3 py-1 text-right">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-xs"
+                                    onClick={() => handleDeletePayment(p.id)}
+                                    disabled={deletePayment.isPending}
+                                    title="Sil"
+                                  >
+                                    ×
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>

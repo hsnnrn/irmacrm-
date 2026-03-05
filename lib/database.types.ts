@@ -243,24 +243,63 @@ export interface Database {
         Row: {
           id: string
           full_name: string | null
-          role: string
+          role: Database["public"]["Enums"]["user_role"]
           created_at: string
         }
         Insert: {
           id: string
           full_name?: string | null
-          role?: string
+          role?: Database["public"]["Enums"]["user_role"]
           created_at?: string
         }
         Update: {
           id?: string
           full_name?: string | null
-          role?: string
+          role?: Database["public"]["Enums"]["user_role"]
           created_at?: string
+        }
+      }
+      customer_payments: {
+        Row: {
+          id: string
+          customer_id: string
+          movement_type: 'BORC' | 'ALACAK'
+          description: string | null
+          invoice_no: string | null
+          amount: number
+          currency: string
+          payment_date: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          movement_type?: 'BORC' | 'ALACAK'
+          description?: string | null
+          invoice_no?: string | null
+          amount: number
+          currency?: string
+          payment_date: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          movement_type?: 'BORC' | 'ALACAK'
+          description?: string | null
+          invoice_no?: string | null
+          amount?: number
+          currency?: string
+          payment_date?: string
+          created_at?: string
+          updated_at?: string
         }
       }
     }
     Enums: {
+      user_role: "SUPER_ADMIN" | "EMPLOYEE" | "READ_ONLY"
       position_status:
         | "DRAFT"
         | "READY_TO_DEPART"
