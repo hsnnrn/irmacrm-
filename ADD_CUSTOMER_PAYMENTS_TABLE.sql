@@ -5,6 +5,10 @@ CREATE TABLE IF NOT EXISTS customer_payments (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   customer_id UUID REFERENCES customers(id) ON DELETE CASCADE NOT NULL,
 
+  -- Hareket Tipi
+  movement_type TEXT NOT NULL DEFAULT 'ALACAK'
+    CHECK (movement_type IN ('BORC', 'ALACAK')),
+
   -- Ödeme Bilgileri
   description TEXT,         -- Ödeme açıklaması (örnek: "Havale - Ocak navlunları")
   invoice_no TEXT,          -- İlgili fatura / makbuz numarası
