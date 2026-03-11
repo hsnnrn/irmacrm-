@@ -70,7 +70,7 @@ export default function SearchPage() {
   const fetchLeads = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetch("http://127.0.0.1:3050/api/leads");
+      const res = await fetch("http://136.114.69.218:3050/api/leads");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       const parsed = parseLeads(text);
