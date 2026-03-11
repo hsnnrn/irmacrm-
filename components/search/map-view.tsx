@@ -80,7 +80,6 @@ export function MapView({ data }: MapViewProps) {
     const initMap = async () => {
       try {
         const L = (await import("leaflet")).default;
-        await import("leaflet/dist/leaflet.css");
 
         if (!isMounted || !mapRef.current) return;
         if (mapInstanceRef.current) {
