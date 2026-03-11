@@ -11,6 +11,7 @@ import {
   Settings,
   TrendingUp,
   UserCog,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUserProfile } from "@/hooks/use-user-profile";
@@ -45,6 +46,14 @@ const navigation = [
     name: "Tedarikçiler",
     href: "/suppliers",
     icon: Truck,
+    requiresFinance: false,
+    requiresSettings: false,
+    requiresUserMgmt: false,
+  },
+  {
+    name: "Search",
+    href: "/search",
+    icon: Search,
     requiresFinance: false,
     requiresSettings: false,
     requiresUserMgmt: false,
