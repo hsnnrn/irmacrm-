@@ -70,7 +70,7 @@ export default function SearchPage() {
   const fetchLeads = useCallback(async () => {
     try {
       setError(null);
-      const res = await fetch("/api/leads", { cache: "no-store" });
+      const res = await fetch(`/api/leads?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       const parsed = parseLeads(text);

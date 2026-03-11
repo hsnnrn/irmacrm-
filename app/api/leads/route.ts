@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const UPSTREAM_URL = "http://136.114.69.218:3050/api/leads";
 
 export async function GET() {
