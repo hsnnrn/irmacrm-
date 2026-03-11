@@ -6,7 +6,8 @@ export interface ShipperLead {
   region: string;
   category: string;
   cargo_type: string;
-  contact: string;
+  email: string;
+  phone: string;
   source: string;
 }
 
@@ -18,7 +19,8 @@ export interface CarrierLead {
   region: string;
   category: string;
   transport_scope: string;
-  contact: string;
+  email: string;
+  phone: string;
   source: string;
 }
 
@@ -50,6 +52,11 @@ function parseBlock(block: string): Lead | null {
     fields[key] = value;
   }
 
+  // Backward compat: old schema used "contact" for email
+  const legacyContact = fields["contact"] ?? "";
+  const emailVal = fields["email"] || (legacyContact.includes("@") ? legacyContact : "");
+  const phoneVal = fields["phone"] || (legacyContact.includes("@") ? "" : legacyContact);
+
   if (typeRaw === "SHIPPER") {
     return {
       type: "SHIPPER",
@@ -59,7 +66,8 @@ function parseBlock(block: string): Lead | null {
       region: fields["region"] ?? "",
       category: fields["category"] ?? "",
       cargo_type: fields["cargo_type"] ?? "",
-      contact: fields["contact"] ?? "",
+      email: emailVal,
+      phone: phoneVal,
       source: fields["source"] ?? "",
     };
   } else {
@@ -71,7 +79,8 @@ function parseBlock(block: string): Lead | null {
       region: fields["region"] ?? "",
       category: fields["category"] ?? "",
       transport_scope: fields["transport_scope"] ?? "",
-      contact: fields["contact"] ?? "",
+      email: emailVal,
+      phone: phoneVal,
       source: fields["source"] ?? "",
     };
   }
