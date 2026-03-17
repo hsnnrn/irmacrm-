@@ -55,6 +55,13 @@ import { useDocumentTypes } from "@/hooks/use-document-types";
 import { usePositionInvoices } from "@/hooks/use-invoices";
 import { useToast } from "@/hooks/use-toast";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
+import { useUserProfile } from "@/hooks/use-user-profile";
+import {
+  usePositionTrips,
+  useCreatePositionTrip,
+  useDeletePositionTrip,
+  type PositionTrip,
+} from "@/hooks/use-position-trips";
 import {
   usePositionPayments,
   useCreatePayment,
@@ -81,6 +88,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function PositionDetailPage({
   params,
@@ -132,16 +148,30 @@ export default function PositionDetailPage({
   const { data: invoicesData } = usePositionInvoices(positionId || "");
   const { data: paymentsData } = usePositionPayments(positionId || "");
   const { data: exchangeRates } = useExchangeRates();
+  const { role } = useUserProfile();
+  const isSuperAdmin = role === "SUPER_ADMIN";
   const updatePosition = useUpdatePosition();
   const deleteDocument = useDeleteDocument();
   const createPayment = useCreatePayment();
   const updatePayment = useUpdatePayment();
   const deletePayment = useDeletePayment();
+  const { data: tripsData } = usePositionTrips(positionId || "");
+  const createTrip = useCreatePositionTrip();
+  const deleteTrip = useDeletePositionTrip();
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [tripDialogOpen, setTripDialogOpen] = useState(false);
+  const [tripFormData, setTripFormData] = useState({
+    loading_point: "",
+    unloading_point: "",
+    cargo_description: "",
+    departure_date: "",
+    delivery_date: "",
+    notes: "",
+  });
   const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
   const [expandedDocTypes, setExpandedDocTypes] = useState<Set<string>>(new Set());
@@ -350,6 +380,7 @@ export default function PositionDetailPage({
   };
 
   const isDraft = typedPosition?.status === "DRAFT";
+  const canEditFinancials = isDraft || isSuperAdmin;
 
   // Get exchange rate for a currency
   const getExchangeRate = (currency: string): number => {
@@ -488,6 +519,71 @@ export default function PositionDetailPage({
     }
   };
 
+  const handleSaveTrip = async () => {
+    if (!positionId || !tripFormData.loading_point || !tripFormData.unloading_point) {
+      toast({
+        title: "Hata!",
+        description: "Yükleme ve boşaltma noktaları zorunludur.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      await createTrip.mutateAsync({
+        position_id: positionId,
+        loading_point: tripFormData.loading_point,
+        unloading_point: tripFormData.unloading_point,
+        cargo_description: tripFormData.cargo_description || null,
+        departure_date: tripFormData.departure_date || null,
+        delivery_date: tripFormData.delivery_date || null,
+        notes: tripFormData.notes || null,
+        created_by: user?.id || null,
+      });
+
+      toast({
+        title: "Başarılı!",
+        description: "Ek sefer başarıyla eklendi.",
+      });
+
+      setTripFormData({
+        loading_point: "",
+        unloading_point: "",
+        cargo_description: "",
+        departure_date: "",
+        delivery_date: "",
+        notes: "",
+      });
+      setTripDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteTrip = async (trip: PositionTrip) => {
+    if (!confirm(`Sefer #${trip.trip_no} kaydını silmek istediğinize emin misiniz?`)) return;
+
+    try {
+      await deleteTrip.mutateAsync({ id: trip.id, positionId: trip.position_id });
+      toast({
+        title: "Başarılı!",
+        description: "Sefer kaydı silindi.",
+      });
+    } catch (error) {
+      toast({
+        title: "Hata!",
+        description: translateSupabaseError(error),
+        variant: "destructive",
+      });
+    }
+  };
+
   const customerName = typedPosition.customers?.company_name || "Müşteri";
   const supplierName = typedPosition.suppliers?.company_name || "Tedarikçi";
 
@@ -611,6 +707,16 @@ export default function PositionDetailPage({
           <TabsTrigger value="overview">Genel Bakış</TabsTrigger>
           <TabsTrigger value="documents">Belgeler</TabsTrigger>
           <TabsTrigger value="financials">Finansal</TabsTrigger>
+          {isSuperAdmin && (
+            <TabsTrigger value="trips">
+              Ek Seferler
+              {tripsData && tripsData.length > 0 && (
+                <span className="ml-2 rounded-full bg-red-600 px-1.5 py-0.5 text-xs text-white">
+                  {tripsData.length}
+                </span>
+              )}
+            </TabsTrigger>
+          )}
           <TabsTrigger value="events">Olaylar</TabsTrigger>
         </TabsList>
 
@@ -837,14 +943,16 @@ export default function PositionDetailPage({
 
         {/* Financials Tab */}
         <TabsContent value="financials" className="space-y-4">
-          {isDraft && (
-            <Card className="border-blue-200 bg-blue-50">
+          {canEditFinancials && (
+            <Card className={isSuperAdmin && !isDraft ? "border-orange-200 bg-orange-50" : "border-blue-200 bg-blue-50"}>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-blue-600" />
-                    <p className="text-sm text-blue-800">
-                      Pozisyon taslak durumunda. Finansal bilgileri düzenleyebilirsiniz.
+                    <AlertCircle className={`h-5 w-5 ${isSuperAdmin && !isDraft ? "text-orange-600" : "text-blue-600"}`} />
+                    <p className={`text-sm ${isSuperAdmin && !isDraft ? "text-orange-800" : "text-blue-800"}`}>
+                      {isSuperAdmin && !isDraft
+                        ? "Süper Admin yetkisiyle navlun fiyatlarını düzenleyebilirsiniz."
+                        : "Pozisyon taslak durumunda. Finansal bilgileri düzenleyebilirsiniz."}
                     </p>
                   </div>
                   {!isEditingFinancials ? (
@@ -891,7 +999,7 @@ export default function PositionDetailPage({
                 <CardTitle>Satış (Navlun)</CardTitle>
               </CardHeader>
               <CardContent>
-                {isDraft && isEditingFinancials ? (
+                {canEditFinancials && isEditingFinancials ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="sales_price">Satış Fiyatı</Label>
@@ -961,7 +1069,7 @@ export default function PositionDetailPage({
                 <CardTitle>Maliyet</CardTitle>
               </CardHeader>
               <CardContent>
-                {isDraft && isEditingFinancials ? (
+                {canEditFinancials && isEditingFinancials ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="cost_price">Maliyet Fiyatı</Label>
@@ -1032,16 +1140,16 @@ export default function PositionDetailPage({
               </CardHeader>
               <CardContent>
                 {(() => {
-                  const salesPrice = isDraft && isEditingFinancials
+                  const salesPrice = canEditFinancials && isEditingFinancials
                     ? (financialData.sales_price ? parseFloat(financialData.sales_price) : 0)
                     : (typedPosition.sales_price ?? 0);
-                  const costPrice = isDraft && isEditingFinancials
+                  const costPrice = canEditFinancials && isEditingFinancials
                     ? (financialData.cost_price ? parseFloat(financialData.cost_price) : 0)
                     : (typedPosition.cost_price ?? 0);
-                  const salesCurrency = isDraft && isEditingFinancials
+                  const salesCurrency = canEditFinancials && isEditingFinancials
                     ? financialData.sales_currency
                     : typedPosition.sales_currency;
-                  const costCurrency = isDraft && isEditingFinancials
+                  const costCurrency = canEditFinancials && isEditingFinancials
                     ? financialData.cost_currency
                     : typedPosition.cost_currency;
                   
@@ -1297,6 +1405,103 @@ export default function PositionDetailPage({
           </Card>
         </TabsContent>
 
+        {/* Ek Seferler Tab - only for SUPER_ADMIN */}
+        {isSuperAdmin && (
+          <TabsContent value="trips" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Ek Seferler</CardTitle>
+                    <CardDescription>
+                      Bu pozisyona bağlı ek sefer kayıtları
+                    </CardDescription>
+                  </div>
+                  <Button size="sm" onClick={() => setTripDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Ek Sefer Ekle
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {tripsData && tripsData.length > 0 ? (
+                  <div className="space-y-3">
+                    {tripsData.map((trip: PositionTrip) => (
+                      <div
+                        key={trip.id}
+                        className="rounded-lg border bg-white p-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                Sefer #{trip.trip_no}
+                              </Badge>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <div>
+                                <p className="text-xs text-gray-500">Yükleme Noktası</p>
+                                <p className="font-medium">{trip.loading_point}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500">Boşaltma Noktası</p>
+                                <p className="font-medium">{trip.unloading_point}</p>
+                              </div>
+                              {trip.cargo_description && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Yük Açıklaması</p>
+                                  <p className="font-medium">{trip.cargo_description}</p>
+                                </div>
+                              )}
+                              {trip.departure_date && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Kalkış Tarihi</p>
+                                  <p className="font-medium">{formatDate(trip.departure_date)}</p>
+                                </div>
+                              )}
+                              {trip.delivery_date && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Teslimat Tarihi</p>
+                                  <p className="font-medium">{formatDate(trip.delivery_date)}</p>
+                                </div>
+                              )}
+                              {trip.notes && (
+                                <div className="sm:col-span-2">
+                                  <p className="text-xs text-gray-500">Notlar</p>
+                                  <p className="text-sm text-gray-700">{trip.notes}</p>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400">
+                              Eklendi: {formatDate(trip.created_at)}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteTrip(trip)}
+                            className="ml-2 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-10 text-center text-gray-500">
+                    <Package className="mx-auto mb-2 h-12 w-12 opacity-30" />
+                    <p>Henüz ek sefer kaydı yok</p>
+                    <p className="mt-1 text-sm">
+                      Yukarıdaki butona tıklayarak ek sefer ekleyebilirsiniz.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
         {/* Events Tab */}
         <TabsContent value="events" className="space-y-4">
           <Card>
@@ -1359,6 +1564,111 @@ export default function PositionDetailPage({
         formData={paymentFormData}
         onFormDataChange={setPaymentFormData}
       />
+
+      {/* Ek Sefer Dialog */}
+      <Dialog open={tripDialogOpen} onOpenChange={setTripDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ek Sefer Ekle</DialogTitle>
+            <DialogDescription>
+              Pozisyon #{typedPosition.position_no} için yeni bir sefer kaydı oluşturun.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="trip_loading_point">
+                  Yükleme Noktası <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="trip_loading_point"
+                  value={tripFormData.loading_point}
+                  onChange={(e) =>
+                    setTripFormData((prev) => ({ ...prev, loading_point: e.target.value }))
+                  }
+                  placeholder="Örn: İstanbul"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="trip_unloading_point">
+                  Boşaltma Noktası <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="trip_unloading_point"
+                  value={tripFormData.unloading_point}
+                  onChange={(e) =>
+                    setTripFormData((prev) => ({ ...prev, unloading_point: e.target.value }))
+                  }
+                  placeholder="Örn: Moskova"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trip_cargo">Yük Açıklaması</Label>
+              <Input
+                id="trip_cargo"
+                value={tripFormData.cargo_description}
+                onChange={(e) =>
+                  setTripFormData((prev) => ({ ...prev, cargo_description: e.target.value }))
+                }
+                placeholder="Yük içeriği..."
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="trip_departure">Kalkış Tarihi</Label>
+                <Input
+                  id="trip_departure"
+                  type="date"
+                  value={tripFormData.departure_date}
+                  onChange={(e) =>
+                    setTripFormData((prev) => ({ ...prev, departure_date: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="trip_delivery">Teslimat Tarihi</Label>
+                <Input
+                  id="trip_delivery"
+                  type="date"
+                  value={tripFormData.delivery_date}
+                  onChange={(e) =>
+                    setTripFormData((prev) => ({ ...prev, delivery_date: e.target.value }))
+                  }
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="trip_notes">Notlar</Label>
+              <Textarea
+                id="trip_notes"
+                value={tripFormData.notes}
+                onChange={(e) =>
+                  setTripFormData((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                placeholder="Ek bilgiler..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTripDialogOpen(false)}>
+              İptal
+            </Button>
+            <Button
+              onClick={handleSaveTrip}
+              disabled={createTrip.isPending}
+            >
+              {createTrip.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
+              Sefer Ekle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

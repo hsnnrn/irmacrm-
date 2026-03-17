@@ -259,6 +259,50 @@ export interface Database {
           created_at?: string
         }
       }
+      position_trips: {
+        Row: {
+          id: string
+          position_id: string
+          trip_no: number
+          loading_point: string
+          unloading_point: string
+          cargo_description: string | null
+          departure_date: string | null
+          delivery_date: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          position_id: string
+          trip_no?: number
+          loading_point: string
+          unloading_point: string
+          cargo_description?: string | null
+          departure_date?: string | null
+          delivery_date?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          position_id?: string
+          trip_no?: number
+          loading_point?: string
+          unloading_point?: string
+          cargo_description?: string | null
+          departure_date?: string | null
+          delivery_date?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       customer_payments: {
         Row: {
           id: string
