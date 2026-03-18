@@ -3,12 +3,14 @@ export interface ShipperLead {
   company_name: string;
   country: string;
   city: string;
-  region: string;
-  category: string;
-  cargo_type: string;
   email: string;
   phone: string;
+  website: string;
   source: string;
+  added_at: string;
+  cargo_type: string;
+  export_destinations: string[];
+  transport_needs: string[];
 }
 
 export interface CarrierLead {
@@ -16,12 +18,14 @@ export interface CarrierLead {
   company_name: string;
   country: string;
   city: string;
-  region: string;
-  category: string;
-  transport_scope: string;
   email: string;
   phone: string;
+  website: string;
   source: string;
+  added_at: string;
+  transport_modes: string[];
+  special_services: string[];
+  route_focus: string;
 }
 
 export type Lead = ShipperLead | CarrierLead;
@@ -32,72 +36,67 @@ export interface ParsedLeads {
   all: Lead[];
 }
 
-function parseBlock(block: string): Lead | null {
-  const lines = block
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  if (lines.length === 0) return null;
-
-  const typeRaw = lines[0].toUpperCase();
-  if (typeRaw !== "SHIPPER" && typeRaw !== "CARRIER") return null;
-
-  const fields: Record<string, string> = {};
-  for (let i = 1; i < lines.length; i++) {
-    const colonIdx = lines[i].indexOf(":");
-    if (colonIdx === -1) continue;
-    const key = lines[i].slice(0, colonIdx).trim().toLowerCase().replace(/\s+/g, "_");
-    const value = lines[i].slice(colonIdx + 1).trim();
-    fields[key] = value;
-  }
-
-  // Backward compat: old schema used "contact" for email
-  const legacyContact = fields["contact"] ?? "";
-  const emailVal = fields["email"] || (legacyContact.includes("@") ? legacyContact : "");
-  const phoneVal = fields["phone"] || (legacyContact.includes("@") ? "" : legacyContact);
-
-  if (typeRaw === "SHIPPER") {
-    return {
-      type: "SHIPPER",
-      company_name: fields["company_name"] ?? "",
-      country: fields["country"] ?? "",
-      city: fields["city"] ?? "",
-      region: fields["region"] ?? "",
-      category: fields["category"] ?? "",
-      cargo_type: fields["cargo_type"] ?? "",
-      email: emailVal,
-      phone: phoneVal,
-      source: fields["source"] ?? "",
-    };
-  } else {
-    return {
-      type: "CARRIER",
-      company_name: fields["company_name"] ?? "",
-      country: fields["country"] ?? "",
-      city: fields["city"] ?? "",
-      region: fields["region"] ?? "",
-      category: fields["category"] ?? "",
-      transport_scope: fields["transport_scope"] ?? "",
-      email: emailVal,
-      phone: phoneVal,
-      source: fields["source"] ?? "",
-    };
-  }
+function toStringArray(val: unknown): string[] {
+  if (Array.isArray(val)) return val.filter((v) => typeof v === "string");
+  if (typeof val === "string" && val.length > 0) return [val];
+  return [];
 }
 
-export function parseLeads(rawText: string): ParsedLeads {
-  const blocks = rawText.split(/\n---\n/);
+function mapShipper(raw: Record<string, unknown>): ShipperLead {
+  return {
+    type: "SHIPPER",
+    company_name: String(raw.company_name ?? ""),
+    country: String(raw.country ?? ""),
+    city: String(raw.city ?? ""),
+    email: String(raw.email ?? ""),
+    phone: String(raw.phone ?? ""),
+    website: String(raw.website ?? ""),
+    source: String(raw.source ?? ""),
+    added_at: String(raw.added_at ?? ""),
+    cargo_type: String(raw.cargo_type ?? ""),
+    export_destinations: toStringArray(raw.export_destinations),
+    transport_needs: toStringArray(raw.transport_needs),
+  };
+}
+
+function mapCarrier(raw: Record<string, unknown>): CarrierLead {
+  return {
+    type: "CARRIER",
+    company_name: String(raw.company_name ?? ""),
+    country: String(raw.country ?? ""),
+    city: String(raw.city ?? ""),
+    email: String(raw.email ?? ""),
+    phone: String(raw.phone ?? ""),
+    website: String(raw.website ?? ""),
+    source: String(raw.source ?? ""),
+    added_at: String(raw.added_at ?? ""),
+    transport_modes: toStringArray(raw.transport_modes),
+    special_services: toStringArray(raw.special_services),
+    route_focus: String(raw.route_focus ?? ""),
+  };
+}
+
+export function parseLeads(json: unknown[]): ParsedLeads {
   const all: Lead[] = [];
   const shippers: ShipperLead[] = [];
   const carriers: CarrierLead[] = [];
 
-  for (const block of blocks) {
-    const lead = parseBlock(block.trim());
-    if (!lead) continue;
-    all.push(lead);
-    if (lead.type === "SHIPPER") shippers.push(lead);
-    else carriers.push(lead as CarrierLead);
+  if (!Array.isArray(json)) return { all, shippers, carriers };
+
+  for (const item of json) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item as Record<string, unknown>;
+    const type = String(raw.type ?? "").toUpperCase();
+
+    if (type === "SHIPPER") {
+      const lead = mapShipper(raw);
+      all.push(lead);
+      shippers.push(lead);
+    } else if (type === "CARRIER") {
+      const lead = mapCarrier(raw);
+      all.push(lead);
+      carriers.push(lead);
+    }
   }
 
   return { all, shippers, carriers };

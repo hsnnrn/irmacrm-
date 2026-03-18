@@ -7,7 +7,7 @@ const UPSTREAM_BASE = "http://136.114.69.218:3050";
 
 export async function GET() {
   try {
-    const res = await fetch(`${UPSTREAM_BASE}/api/leads`, {
+    const res = await fetch(`${UPSTREAM_BASE}/api/carriers`, {
       next: { revalidate: 0 },
       cache: "no-store",
     });

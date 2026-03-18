@@ -2,31 +2,70 @@
 
 import { useState, useMemo, memo, useCallback } from "react";
 import { ShipperLead } from "@/lib/lead-parser";
-import { ExternalLink, Mail, Phone, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ExternalLink, Mail, Phone, ChevronLeft, ChevronRight, Search, Globe } from "lucide-react";
 
-const CATEGORY_STYLES: Record<string, { label: string; className: string }> = {
-  EU_EXPORTER: { label: "EU İhracatçı", className: "bg-blue-100 text-blue-700 border-blue-200" },
-  GLOBAL_EXPORTER: { label: "Global İhracatçı", className: "bg-violet-100 text-violet-700 border-violet-200" },
-  LOCAL: { label: "Yerel", className: "bg-gray-100 text-gray-700 border-gray-200" },
-  REGIONAL: { label: "Bölgesel", className: "bg-amber-100 text-amber-700 border-amber-200" },
+const COUNTRY_FLAGS: Record<string, string> = {
+  turkey: "🇹🇷",
+  germany: "🇩🇪",
+  france: "🇫🇷",
+  netherlands: "🇳🇱",
+  belgium: "🇧🇪",
+  austria: "🇦🇹",
+  italy: "🇮🇹",
+  spain: "🇪🇸",
+  poland: "🇵🇱",
+  romania: "🇷🇴",
+  bulgaria: "🇧🇬",
+  greece: "🇬🇷",
+  hungary: "🇭🇺",
+  czechia: "🇨🇿",
+  europe: "🇪🇺",
+  sweden: "🇸🇪",
+  uk: "🇬🇧",
+  "united kingdom": "🇬🇧",
+  "united states": "🇺🇸",
+  usa: "🇺🇸",
+  russia: "🇷🇺",
+  ukraine: "🇺🇦",
+  georgia: "🇬🇪",
+  azerbaijan: "🇦🇿",
+  iran: "🇮🇷",
 };
 
-const CategoryBadge = memo(function CategoryBadge({ category }: { category: string }) {
-  const key = category?.toUpperCase();
-  const style = CATEGORY_STYLES[key] ?? {
-    label: category || "—",
-    className: "bg-slate-100 text-slate-600 border-slate-200",
-  };
+function getFlag(name: string): string {
+  return COUNTRY_FLAGS[name.toLowerCase()] ?? "";
+}
+
+const TRANSPORT_NEED_STYLES: Record<string, string> = {
+  ROAD: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  SEA: "bg-blue-100 text-blue-700 border-blue-200",
+  AIR: "bg-sky-100 text-sky-700 border-sky-200",
+  RAIL: "bg-amber-100 text-amber-700 border-amber-200",
+  MULTIMODAL: "bg-violet-100 text-violet-700 border-violet-200",
+};
+
+const DestinationBadge = memo(function DestinationBadge({ dest }: { dest: string }) {
+  const flag = getFlag(dest);
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${style.className}`}>
-      {style.label}
+    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">
+      {flag && <span>{flag}</span>}
+      {dest}
+    </span>
+  );
+});
+
+const TransportNeedBadge = memo(function TransportNeedBadge({ mode }: { mode: string }) {
+  const cls = TRANSPORT_NEED_STYLES[mode.toUpperCase()] ?? "bg-slate-100 text-slate-600 border-slate-200";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium whitespace-nowrap ${cls}`}>
+      {mode}
     </span>
   );
 });
 
 const ContactCell = memo(function ContactCell({ email, phone }: { email: string; phone: string }) {
-  const hasEmail = email && email !== "unknown";
-  const hasPhone = phone && phone !== "unknown";
+  const hasEmail = !!email;
+  const hasPhone = !!phone;
   if (!hasEmail && !hasPhone) return <span className="text-gray-400">—</span>;
   return (
     <div className="flex flex-col gap-1 min-w-[140px]">
@@ -50,22 +89,49 @@ const ShipperRow = memo(function ShipperRow({ s }: { s: ShipperLead }) {
   return (
     <tr className="hover:bg-blue-50/30 transition-colors">
       <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{s.company_name || "—"}</td>
-      <td className="px-4 py-3 text-gray-600">{s.cargo_type || "—"}</td>
-      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.country || "—"}</td>
-      <td className="px-4 py-3 text-gray-600">{s.city || "—"}</td>
-      <td className="px-4 py-3 text-gray-600">{s.region || "—"}</td>
-      <td className="px-4 py-3">
-        <CategoryBadge category={s.category} />
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{s.city || "—"}</td>
+      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+        {s.cargo_type || <span className="text-gray-400">—</span>}
+      </td>
+      <td className="px-4 py-3 max-w-[240px]">
+        {s.export_destinations.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {s.export_destinations.map((d, i) => (
+              <DestinationBadge key={i} dest={d} />
+            ))}
+          </div>
+        ) : (
+          <span className="text-gray-400">—</span>
+        )}
+      </td>
+      <td className="px-4 py-3 max-w-[180px]">
+        {s.transport_needs.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {s.transport_needs.map((m, i) => (
+              <TransportNeedBadge key={i} mode={m} />
+            ))}
+          </div>
+        ) : (
+          <span className="text-gray-400">—</span>
+        )}
       </td>
       <td className="px-4 py-3">
         <ContactCell email={s.email} phone={s.phone} />
       </td>
       <td className="px-4 py-3">
-        {s.source ? (
-          <a href={s.source} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap text-xs">
-            <ExternalLink className="h-3.5 w-3.5" /> Link
-          </a>
-        ) : "—"}
+        <div className="flex flex-col gap-1">
+          {s.website ? (
+            <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 text-xs whitespace-nowrap">
+              <Globe className="h-3.5 w-3.5" /> Web
+            </a>
+          ) : null}
+          {s.source ? (
+            <a href={s.source} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 whitespace-nowrap text-xs">
+              <ExternalLink className="h-3.5 w-3.5" /> Kaynak
+            </a>
+          ) : null}
+          {!s.website && !s.source && <span className="text-gray-400">—</span>}
+        </div>
       </td>
     </tr>
   );
@@ -79,18 +145,20 @@ interface ShippersTableProps {
 
 export function ShippersTable({ shippers }: ShippersTableProps) {
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
-  const [countryFilter, setCountryFilter] = useState("ALL");
+  const [destFilter, setDestFilter] = useState("ALL");
+  const [needFilter, setNeedFilter] = useState("ALL");
   const [sortAsc, setSortAsc] = useState(true);
   const [page, setPage] = useState(1);
 
-  const categories = useMemo(() => {
-    const set = new Set(shippers.map((s) => s.category?.toUpperCase()).filter(Boolean));
-    return ["ALL", ...Array.from(set)];
+  const allDestinations = useMemo(() => {
+    const set = new Set<string>();
+    shippers.forEach((s) => s.export_destinations.forEach((d) => set.add(d)));
+    return ["ALL", ...Array.from(set).sort()];
   }, [shippers]);
 
-  const countries = useMemo(() => {
-    const set = new Set(shippers.map((s) => s.country).filter(Boolean));
+  const allNeeds = useMemo(() => {
+    const set = new Set<string>();
+    shippers.forEach((s) => s.transport_needs.forEach((n) => set.add(n.toUpperCase())));
     return ["ALL", ...Array.from(set).sort()];
   }, [shippers]);
 
@@ -98,17 +166,22 @@ export function ShippersTable({ shippers }: ShippersTableProps) {
     let list = shippers;
     if (search) {
       const q = search.toLowerCase();
-      list = list.filter((s) => s.company_name.toLowerCase().includes(q));
+      list = list.filter(
+        (s) =>
+          s.company_name.toLowerCase().includes(q) ||
+          s.city.toLowerCase().includes(q) ||
+          s.cargo_type.toLowerCase().includes(q)
+      );
     }
-    if (categoryFilter !== "ALL")
-      list = list.filter((s) => s.category?.toUpperCase() === categoryFilter);
-    if (countryFilter !== "ALL")
-      list = list.filter((s) => s.country === countryFilter);
+    if (destFilter !== "ALL")
+      list = list.filter((s) => s.export_destinations.includes(destFilter));
+    if (needFilter !== "ALL")
+      list = list.filter((s) => s.transport_needs.some((n) => n.toUpperCase() === needFilter));
     return [...list].sort((a, b) => {
       const cmp = a.company_name.localeCompare(b.company_name);
       return sortAsc ? cmp : -cmp;
     });
-  }, [shippers, search, categoryFilter, countryFilter, sortAsc]);
+  }, [shippers, search, destFilter, needFilter, sortAsc]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = useMemo(
@@ -120,12 +193,12 @@ export function ShippersTable({ shippers }: ShippersTableProps) {
     setSearch(e.target.value);
     setPage(1);
   }, []);
-  const handleCategory = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setCategoryFilter(e.target.value);
+  const handleDest = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setDestFilter(e.target.value);
     setPage(1);
   }, []);
-  const handleCountry = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setCountryFilter(e.target.value);
+  const handleNeed = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setNeedFilter(e.target.value);
     setPage(1);
   }, []);
   const handlePage = useCallback((p: number) => setPage(Math.min(Math.max(1, p), totalPages)), [totalPages]);
@@ -138,28 +211,28 @@ export function ShippersTable({ shippers }: ShippersTableProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Firma ara..."
+            placeholder="Firma, şehir veya yük ara..."
             value={search}
             onChange={handleSearch}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <select
-          value={categoryFilter}
-          onChange={handleCategory}
+          value={destFilter}
+          onChange={handleDest}
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          {categories.map((c) => (
-            <option key={c} value={c}>{c === "ALL" ? "Tüm Kategoriler" : c}</option>
+          {allDestinations.map((d) => (
+            <option key={d} value={d}>{d === "ALL" ? "Tüm İhracat Hedefleri" : d}</option>
           ))}
         </select>
         <select
-          value={countryFilter}
-          onChange={handleCountry}
+          value={needFilter}
+          onChange={handleNeed}
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          {countries.map((c) => (
-            <option key={c} value={c}>{c === "ALL" ? "Tüm Ülkeler" : c}</option>
+          {allNeeds.map((n) => (
+            <option key={n} value={n}>{n === "ALL" ? "Tüm Taşıma İhtiyaçları" : n}</option>
           ))}
         </select>
         <button
@@ -178,13 +251,12 @@ export function ShippersTable({ shippers }: ShippersTableProps) {
             <tr className="bg-gray-50 border-b border-gray-100">
               {[
                 "Firma",
-                "Yük Tipi",
-                "Ülke",
                 "Şehir",
-                "Bölge",
-                "Kategori",
+                "Yük Tipi",
+                "İhracat Hedefleri",
+                "Taşıma İhtiyacı",
                 "İletişim",
-                "Kaynak",
+                "Bağlantılar",
               ].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">
                   {h}
@@ -195,7 +267,7 @@ export function ShippersTable({ shippers }: ShippersTableProps) {
           <tbody className="divide-y divide-gray-50">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-10 text-gray-400">
+                <td colSpan={7} className="text-center py-10 text-gray-400">
                   Gönderi firması bulunamadı.
                 </td>
               </tr>

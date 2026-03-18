@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Building2, Truck, Globe, Route, Sparkles } from "lucide-react";
+import { Building2, Truck, Globe, Snowflake, Sparkles } from "lucide-react";
 import { ParsedLeads } from "@/lib/lead-parser";
 
 interface SummaryCardsProps {
@@ -29,12 +29,15 @@ const StatCard = memo(function StatCard({ label, value, icon, bgColor }: CardPro
 });
 
 export const SummaryCards = memo(function SummaryCards({ data, lastUpdated }: SummaryCardsProps) {
-  const euExporters = data.shippers.filter(
-    (s) => s.category?.toUpperCase() === "EU_EXPORTER"
+  const euShippers = data.shippers.filter((s) =>
+    s.export_destinations.some((d) =>
+      ["europe", "germany", "netherlands", "france", "belgium", "austria", "italy", "spain", "poland"]
+        .includes(d.toLowerCase())
+    )
   ).length;
 
-  const trEuCarriers = data.carriers.filter((c) =>
-    c.category?.toUpperCase().includes("TR_EU")
+  const frigCarriers = data.carriers.filter((c) =>
+    c.special_services.some((s) => s.toUpperCase() === "REFRIGERATED")
   ).length;
 
   return (
@@ -53,19 +56,19 @@ export const SummaryCards = memo(function SummaryCards({ data, lastUpdated }: Su
           bgColor="bg-emerald-50"
         />
         <StatCard
-          label="AB İhracatçısı"
-          value={euExporters}
+          label="Avrupa İhracatçısı"
+          value={euShippers}
           icon={<Globe className="h-5 w-5 text-violet-600" />}
           bgColor="bg-violet-50"
         />
         <StatCard
-          label="TR-AB Nakliyeci"
-          value={trEuCarriers}
-          icon={<Route className="h-5 w-5 text-orange-600" />}
-          bgColor="bg-orange-50"
+          label="Frigofirik Nakliyeci"
+          value={frigCarriers}
+          icon={<Snowflake className="h-5 w-5 text-cyan-600" />}
+          bgColor="bg-cyan-50"
         />
         <StatCard
-          label="Yeni Keşfedilen"
+          label="Toplam Keşfedilen"
           value={data.all.length}
           icon={<Sparkles className="h-5 w-5 text-rose-600" />}
           bgColor="bg-rose-50"

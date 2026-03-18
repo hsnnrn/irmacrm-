@@ -72,8 +72,8 @@ export default function SearchPage() {
       setError(null);
       const res = await fetch(`/api/leads?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      const parsed = parseLeads(text);
+      const json = await res.json();
+      const parsed = parseLeads(Array.isArray(json) ? json : []);
       setData(parsed);
       setLastUpdated(new Date());
     } catch (err: any) {
