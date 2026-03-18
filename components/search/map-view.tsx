@@ -124,7 +124,7 @@ export function MapView({ data }: MapViewProps) {
           if (!coords) continue;
           L.marker(coords, { icon: shipperIcon })
             .bindTooltip(
-              `<strong>${s.company_name || "Unknown"}</strong><br/>${s.city}, ${s.country}<br/>${s.category || ""}`,
+              `<strong>${s.company_name || "Unknown"}</strong><br/>${s.city}, ${s.country}<br/>${s.cargo_type || ""}${s.export_destinations.length ? " → " + s.export_destinations.join(", ") : ""}`,
               { permanent: false, direction: "top" }
             )
             .addTo(map);
@@ -135,7 +135,7 @@ export function MapView({ data }: MapViewProps) {
           if (!coords) continue;
           L.marker(coords, { icon: carrierIcon })
             .bindTooltip(
-              `<strong>${c.company_name || "Unknown"}</strong><br/>${c.city}, ${c.country}<br/>${c.category || ""}`,
+              `<strong>${c.company_name || "Unknown"}</strong><br/>${c.city}, ${c.country}<br/>${c.route_focus || ""}${c.transport_modes.length ? " · " + c.transport_modes.join(", ") : ""}`,
               { permanent: false, direction: "top" }
             )
             .addTo(map);
