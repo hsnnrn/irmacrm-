@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react"
 import dynamic from "next/dynamic";
 import { parseLeads, ParsedLeads } from "@/lib/lead-parser";
 import { SummaryCards } from "@/components/search/summary-cards";
+import { AiMatchSearch } from "@/components/search/ai-match-search";
 import { Loader2, RefreshCw, Building2, Truck, Map } from "lucide-react";
 
 // Lazy-load heavy tab components
@@ -134,6 +135,9 @@ export default function SearchPage() {
 
       {/* Özet Kartlar */}
       <SummaryCards data={data} lastUpdated={lastUpdated} />
+
+      {/* AI Semantik Eşleştirme */}
+      <AiMatchSearch />
 
       {/* Yükleniyor */}
       {loading && (
