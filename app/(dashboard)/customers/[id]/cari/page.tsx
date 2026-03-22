@@ -27,6 +27,28 @@ import { STATUS_LABELS } from "@/lib/position-utils";
 import { printCustomerLedger } from "@/lib/print-utils";
 import { exportToExcel } from "@/lib/export-utils";
 
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type Movement = {
+  date: string;
+  docNo: string;
+  type: "BORC" | "ALACAK";
+  description: string;
+  borc: number;
+  alacak: number;
+  currency: string;
+  status: string;
+};
+
+type CurrencySummary = {
+  currency: string;
+  totalBorc: number;
+  totalAlacak: number;
+  balance: number;
+};
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function CustomerCariPage() {
   const params = useParams();
   const customerId = params?.id as string | undefined;
@@ -35,7 +57,6 @@ export default function CustomerCariPage() {
   const isLoading = ledger.isLoading;
   const error = ledger.error;
 
-  // account_currency sadece bilgi amaçlı gösterilir; dönüşüm yapılmaz
   const accountCurrency = data?.customer?.account_currency || "TRY";
 
   const DEPARTED_STATUSES = [
@@ -45,10 +66,10 @@ export default function CustomerCariPage() {
     "COMPLETED",
   ] as const;
 
-  const { positions, movements, currencySummary } = useMemo(() => {
+  const { positions, movements, currencySummaries } = useMemo(() => {
     const allPos = data?.positions || [];
     const pos = allPos.filter((p) =>
-      DEPARTED_STATUSES.includes(p.status as any)
+      DEPARTED_STATUSES.includes(p.status as (typeof DEPARTED_STATUSES)[number])
     );
     const posIds = new Set(pos.map((p) => p.id));
     const invs = (data?.allInvoices || []).filter((inv) =>
@@ -59,7 +80,7 @@ export default function CustomerCariPage() {
 
     const salesInvoices = invs.filter((inv) => inv.invoice_type === "SALES");
 
-    type RawMovement = {
+    type RawItem = {
       date: Date;
       docNo: string;
       type: "BORC" | "ALACAK";
@@ -69,9 +90,9 @@ export default function CustomerCariPage() {
       status: string;
     };
 
-    const items: RawMovement[] = [];
+    const items: RawItem[] = [];
 
-    // Borç: Satış faturaları — kendi orijinal para biriminde
+    // Borç: Satış faturaları varsa onlar (kendi döviz cinsinde), yoksa pozisyon tutarları
     if (salesInvoices.length > 0) {
       salesInvoices.forEach((inv) => {
         const position = pos.find((p) => p.id === inv.position_id);
@@ -83,21 +104,19 @@ export default function CustomerCariPage() {
           STATUS_LABELS[position?.status as keyof typeof STATUS_LABELS] ||
           position?.status ||
           "-";
-        const desc = position
-          ? `${posLabel} - ${routeDesc} - Satış Faturası`
-          : "Satış Faturası";
         items.push({
           date: new Date(inv.invoice_date),
           docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
           type: "BORC",
-          description: desc,
+          description: position
+            ? `${posLabel} - ${routeDesc} - Satış Faturası`
+            : "Satış Faturası",
           amount: inv.amount,
-          currency: inv.currency || accountCurrency,
+          currency: inv.currency,
           status: statusLabel,
         });
       });
     } else {
-      // Fatura girilmemişse pozisyon satış tutarları — kendi para biriminde
       pos.forEach((position) => {
         const price = position.sales_price || 0;
         if (price > 0) {
@@ -118,56 +137,34 @@ export default function CustomerCariPage() {
       });
     }
 
-    // Manuel cari hareketler — kendi orijinal para biriminde
+    // Manuel cari hareketler — kendi döviz cinsinde
     payments.forEach((p) => {
-      const movType: "BORC" | "ALACAK" =
-        (p.movement_type as "BORC" | "ALACAK") || "ALACAK";
+      const movType: "BORC" | "ALACAK" = (p.movement_type as "BORC" | "ALACAK") || "ALACAK";
       const defaultDesc =
         movType === "ALACAK" ? "Müşteri Ödemesi" : "Manuel Borç Girişi";
       const docNo =
         p.invoice_no ||
-        (movType === "ALACAK"
-          ? `OD-${p.id.slice(0, 8)}`
-          : `MB-${p.id.slice(0, 8)}`);
+        (movType === "ALACAK" ? `OD-${p.id.slice(0, 8)}` : `MB-${p.id.slice(0, 8)}`);
       items.push({
         date: new Date(p.payment_date),
         docNo,
         type: movType,
         description: p.description || defaultDesc,
         amount: p.amount,
-        currency: p.currency || accountCurrency,
+        currency: p.currency,
         status: movType === "ALACAK" ? "Ödeme" : "Manuel Borç",
       });
     });
 
-    // Tarihe göre sıralama (aynı günde BORÇ -> ALACAK)
+    // Tarihe göre sıralama (aynı günde BORÇ → ALACAK)
     const typeOrder: Record<"BORC" | "ALACAK", number> = { BORC: 0, ALACAK: 1 };
     items.sort((a, b) => {
       const diff = a.date.getTime() - b.date.getTime();
-      if (diff !== 0) return diff;
-      return typeOrder[a.type] - typeOrder[b.type];
+      return diff !== 0 ? diff : typeOrder[a.type] - typeOrder[b.type];
     });
 
-    // Per-currency running balances
-    const runningByCurrency: Record<string, number> = {};
-
-    // Devreden bakiye hesaba katılıyor (account_currency cinsinden)
-    if (previousYearBalance !== 0) {
-      runningByCurrency[accountCurrency] =
-        (runningByCurrency[accountCurrency] || 0) + previousYearBalance;
-    }
-
-    const moveList: {
-      date: string;
-      docNo: string;
-      type: "BORC" | "ALACAK";
-      description: string;
-      borc: number;
-      alacak: number;
-      balance: number;
-      currency: string;
-      status: string;
-    }[] = [];
+    // ── Hareketler listesi ──────────────────────────────────────────────────
+    const moveList: Movement[] = [];
 
     if (previousYearBalance !== 0) {
       moveList.push({
@@ -177,20 +174,12 @@ export default function CustomerCariPage() {
         description: "Devreden Bakiye",
         borc: previousYearBalance > 0 ? previousYearBalance : 0,
         alacak: previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0,
-        balance: previousYearBalance,
         currency: accountCurrency,
         status: "-",
       });
     }
 
     items.forEach((item) => {
-      const cur = item.currency;
-      if (runningByCurrency[cur] === undefined) runningByCurrency[cur] = 0;
-      if (item.type === "BORC") {
-        runningByCurrency[cur] += item.amount;
-      } else {
-        runningByCurrency[cur] -= item.amount;
-      }
       moveList.push({
         date: formatDate(item.date),
         docNo: item.docNo,
@@ -198,52 +187,65 @@ export default function CustomerCariPage() {
         description: item.description,
         borc: item.type === "BORC" ? item.amount : 0,
         alacak: item.type === "ALACAK" ? item.amount : 0,
-        balance: runningByCurrency[cur],
-        currency: cur,
+        currency: item.currency,
         status: item.status,
       });
     });
 
-    // Per-currency summary (devreden bakiye dahil)
-    const summary: Record<
-      string,
-      { totalBorc: number; totalAlacak: number; balance: number }
-    > = {};
+    // ── Döviz bazlı toplamlar ───────────────────────────────────────────────
+    const buckets: Record<string, { borc: number; alacak: number }> = {};
 
+    const add = (cur: string, borc: number, alacak: number) => {
+      if (!buckets[cur]) buckets[cur] = { borc: 0, alacak: 0 };
+      buckets[cur].borc += borc;
+      buckets[cur].alacak += alacak;
+    };
+
+    // Devreden bakiye
     if (previousYearBalance !== 0) {
-      summary[accountCurrency] = {
-        totalBorc: previousYearBalance > 0 ? previousYearBalance : 0,
-        totalAlacak: previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0,
-        balance: previousYearBalance,
-      };
+      add(
+        accountCurrency,
+        previousYearBalance > 0 ? previousYearBalance : 0,
+        previousYearBalance < 0 ? Math.abs(previousYearBalance) : 0
+      );
     }
 
     items.forEach((item) => {
-      const cur = item.currency;
-      if (!summary[cur])
-        summary[cur] = { totalBorc: 0, totalAlacak: 0, balance: 0 };
-      if (item.type === "BORC") {
-        summary[cur].totalBorc += item.amount;
-      } else {
-        summary[cur].totalAlacak += item.amount;
-      }
-      summary[cur].balance =
-        summary[cur].totalBorc - summary[cur].totalAlacak;
+      add(
+        item.currency,
+        item.type === "BORC" ? item.amount : 0,
+        item.type === "ALACAK" ? item.amount : 0
+      );
     });
 
-    return {
-      positions: pos,
-      movements: moveList,
-      currencySummary: summary,
-    };
+    const CURRENCY_ORDER = ["USD", "EUR", "TRY", "RUB"];
+    const summaries: CurrencySummary[] = Object.entries(buckets)
+      .map(([currency, vals]) => ({
+        currency,
+        totalBorc: vals.borc,
+        totalAlacak: vals.alacak,
+        balance: vals.borc - vals.alacak,
+      }))
+      .sort(
+        (a, b) =>
+          (CURRENCY_ORDER.indexOf(a.currency) === -1
+            ? 99
+            : CURRENCY_ORDER.indexOf(a.currency)) -
+          (CURRENCY_ORDER.indexOf(b.currency) === -1
+            ? 99
+            : CURRENCY_ORDER.indexOf(b.currency))
+      );
+
+    return { positions: pos, movements: moveList, currencySummaries: summaries };
   }, [data, accountCurrency]);
+
+  // ── Export / Print ─────────────────────────────────────────────────────────
 
   const handlePrint = () => {
     printCustomerLedger({
       customerName: data?.customer?.company_name || "",
       taxId: data?.customer?.tax_id || undefined,
       contactPerson: data?.customer?.contact_person || undefined,
-      currency: accountCurrency,
       movements: movements.map((m) => ({
         date: m.date,
         docNo: m.docNo,
@@ -251,28 +253,15 @@ export default function CustomerCariPage() {
         description: m.description,
         borc: m.borc,
         alacak: m.alacak,
-        balance: m.balance,
+        currency: m.currency,
         status: m.status,
       })),
-      summary: {
-        totalReceivable: Object.values(currencySummary).reduce(
-          (s, c) => s + c.totalBorc,
-          0
-        ),
-        totalReceived: Object.values(currencySummary).reduce(
-          (s, c) => s + c.totalAlacak,
-          0
-        ),
-        balance: Object.values(currencySummary).reduce(
-          (s, c) => s + c.balance,
-          0
-        ),
-      },
+      currencySummaries,
     });
   };
 
   const handleExportExcel = () => {
-    if (!data || !data.customer) return;
+    if (!data?.customer) return;
     const customerName = data.customer.company_name || "Cari_Hesap";
     exportToExcel(
       {
@@ -284,7 +273,6 @@ export default function CustomerCariPage() {
           "Döviz",
           "Borç",
           "Alacak",
-          "Bakiye",
         ],
         rows: movements.map((m) => [
           m.date,
@@ -292,9 +280,8 @@ export default function CustomerCariPage() {
           m.description,
           m.status,
           m.currency,
-          m.borc,
-          m.alacak,
-          m.balance,
+          m.borc || "",
+          m.alacak || "",
         ]),
       },
       `Cari_Ekstresi_${customerName}`
@@ -302,6 +289,8 @@ export default function CustomerCariPage() {
   };
 
   const [showTrips, setShowTrips] = useState(false);
+
+  // ── Loading / Error ────────────────────────────────────────────────────────
 
   if (isLoading) {
     return (
@@ -331,7 +320,7 @@ export default function CustomerCariPage() {
     );
   }
 
-  const currencyEntries = Object.entries(currencySummary);
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -349,7 +338,7 @@ export default function CustomerCariPage() {
               Cari Hesap
             </h1>
             <p className="text-gray-500">
-              {data.customer.company_name} - Cari hesap dökümü
+              {data.customer.company_name} — Cari hesap dökümü
             </p>
           </div>
         </div>
@@ -364,13 +353,13 @@ export default function CustomerCariPage() {
         </div>
       </div>
 
-      {/* Customer Info Card */}
+      {/* Müşteri Bilgileri */}
       <Card>
         <CardHeader>
           <CardTitle>Müşteri Bilgileri</CardTitle>
           <CardDescription>Cari hesap detayları</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-sm text-gray-500">Firma</p>
@@ -396,67 +385,66 @@ export default function CustomerCariPage() {
         </CardContent>
       </Card>
 
-      {/* Per-currency Summary Cards */}
-      {currencyEntries.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6 text-center text-gray-400 text-sm">
-            Henüz cari hareket bulunmuyor.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {currencyEntries.map(([cur, totals]) => (
-            <div key={cur} className="grid gap-4 md:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-2">
+      {/* Döviz Bazlı Özet Kartlar */}
+      {currencySummaries.length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Döviz Bazlı Bakiye
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {currencySummaries.map((s) => (
+              <Card key={s.currency} className="relative overflow-hidden">
+                <div
+                  className={`absolute top-0 left-0 w-1 h-full ${
+                    s.balance > 0
+                      ? "bg-red-400"
+                      : s.balance < 0
+                      ? "bg-emerald-400"
+                      : "bg-gray-300"
+                  }`}
+                />
+                <CardHeader className="pb-2 pl-5">
                   <CardDescription className="flex items-center gap-2">
-                    Toplam Borç
-                    <Badge variant="secondary" className="text-xs">{cur}</Badge>
-                  </CardDescription>
-                  <CardTitle className="text-xl text-red-600">
-                    {formatCurrency(totals.totalBorc, cur)}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription className="flex items-center gap-2">
-                    Toplam Alacak (Tahsilat)
-                    <Badge variant="secondary" className="text-xs">{cur}</Badge>
-                  </CardDescription>
-                  <CardTitle className="text-xl text-emerald-600">
-                    {formatCurrency(totals.totalAlacak, cur)}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription className="flex items-center gap-2">
-                    Kalan Bakiye
-                    <Badge variant="secondary" className="text-xs">{cur}</Badge>
+                    <Badge variant="secondary" className="text-xs font-bold">
+                      {s.currency}
+                    </Badge>
+                    {s.balance > 0
+                      ? "Müşteri Borçlu"
+                      : s.balance < 0
+                      ? "Alacaklıyız"
+                      : "Bakiye Sıfır"}
                   </CardDescription>
                   <CardTitle
                     className={`text-xl ${
-                      totals.balance > 0
-                        ? "text-amber-600"
-                        : totals.balance < 0
+                      s.balance > 0
+                        ? "text-red-600"
+                        : s.balance < 0
                         ? "text-emerald-600"
                         : "text-gray-700"
                     }`}
                   >
-                    {formatCurrency(totals.balance, cur)}
+                    {formatCurrency(Math.abs(s.balance), s.currency)}
                   </CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {totals.balance > 0
-                      ? "Müşteri borçlu"
-                      : totals.balance < 0
-                      ? "Müşteriden alacaklıyız"
-                      : "Bakiye sıfır"}
-                  </p>
                 </CardHeader>
+                <CardContent className="pl-5 pt-0">
+                  <div className="flex gap-4 text-xs text-gray-500">
+                    <span>
+                      Borç:{" "}
+                      <span className="font-medium text-red-600">
+                        {formatCurrency(s.totalBorc, s.currency)}
+                      </span>
+                    </span>
+                    <span>
+                      Alacak:{" "}
+                      <span className="font-medium text-emerald-600">
+                        {formatCurrency(s.totalAlacak, s.currency)}
+                      </span>
+                    </span>
+                  </div>
+                </CardContent>
               </Card>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -496,10 +484,7 @@ export default function CustomerCariPage() {
               <TableBody>
                 {positions.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center text-gray-500 py-8"
-                    >
+                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                       Henüz sefer kaydı bulunmuyor.
                     </TableCell>
                   </TableRow>
@@ -518,27 +503,18 @@ export default function CustomerCariPage() {
                         {pos.loading_point} → {pos.unloading_point}
                       </TableCell>
                       <TableCell className="text-right">
-                        {formatCurrency(
-                          pos.sales_price || 0,
-                          pos.sales_currency
-                        )}
+                        {formatCurrency(pos.sales_price || 0, pos.sales_currency)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
-                          {STATUS_LABELS[
-                            pos.status as keyof typeof STATUS_LABELS
-                          ] || pos.status}
+                          {STATUS_LABELS[pos.status as keyof typeof STATUS_LABELS] || pos.status}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {pos.departure_date
-                          ? formatDate(pos.departure_date)
-                          : "-"}
+                        {pos.departure_date ? formatDate(pos.departure_date) : "-"}
                       </TableCell>
                       <TableCell>
-                        {pos.delivery_date
-                          ? formatDate(pos.delivery_date)
-                          : "-"}
+                        {pos.delivery_date ? formatDate(pos.delivery_date) : "-"}
                       </TableCell>
                     </TableRow>
                   ))
@@ -547,8 +523,8 @@ export default function CustomerCariPage() {
             </Table>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Sefer listesi performans için varsayılan olarak gizlidir.
-              Görüntülemek için yukarıdaki butona tıklayın.
+              Sefer listesi performans için varsayılan olarak gizlidir. Görüntülemek için
+              yukarıdaki butona tıklayın.
             </p>
           )}
         </CardContent>
@@ -559,7 +535,7 @@ export default function CustomerCariPage() {
         <CardHeader>
           <CardTitle>Cari Hesap Hareketleri</CardTitle>
           <CardDescription>
-            Borç, alacak ve bakiye — her kalem kendi orijinal dövizinde gösterilir
+            Her hareket kendi döviz cinsinde gösterilir — otomatik çevrim yapılmaz
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -570,19 +546,15 @@ export default function CustomerCariPage() {
                 <TableHead>Belge No</TableHead>
                 <TableHead>İşlem / Açıklama</TableHead>
                 <TableHead>Sefer Durumu</TableHead>
-                <TableHead>Döviz</TableHead>
+                <TableHead className="text-center">Döviz</TableHead>
                 <TableHead className="text-right">Borç</TableHead>
                 <TableHead className="text-right">Alacak</TableHead>
-                <TableHead className="text-right">Bakiye</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {movements.length === 0 ? (
                 <TableRow>
-                  <TableCell
-                    colSpan={8}
-                    className="text-center text-gray-500 py-8"
-                  >
+                  <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                     Henüz cari hareket bulunmuyor.
                   </TableCell>
                 </TableRow>
@@ -590,52 +562,74 @@ export default function CustomerCariPage() {
                 movements.map((m, idx) => (
                   <TableRow key={idx}>
                     <TableCell>{m.date}</TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {m.docNo}
-                    </TableCell>
-                    <TableCell
-                      className="max-w-xs truncate"
-                      title={m.description}
-                    >
+                    <TableCell className="font-mono text-sm">{m.docNo}</TableCell>
+                    <TableCell className="max-w-xs truncate" title={m.description}>
                       {m.description}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{m.status}</Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       <Badge
                         variant="secondary"
-                        className="font-mono text-xs"
+                        className="text-xs font-bold tracking-wide"
                       >
                         {m.currency}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right text-red-600">
-                      {m.borc > 0
-                        ? formatCurrency(m.borc, m.currency)
-                        : "-"}
+                    <TableCell className="text-right text-red-600 font-medium">
+                      {m.borc > 0 ? formatCurrency(m.borc, m.currency) : "-"}
                     </TableCell>
-                    <TableCell className="text-right text-emerald-600">
-                      {m.alacak > 0
-                        ? formatCurrency(m.alacak, m.currency)
-                        : "-"}
-                    </TableCell>
-                    <TableCell
-                      className={`text-right font-medium ${
-                        m.balance > 0
-                          ? "text-amber-600"
-                          : m.balance < 0
-                          ? "text-emerald-600"
-                          : "text-gray-500"
-                      }`}
-                    >
-                      {formatCurrency(m.balance, m.currency)}
+                    <TableCell className="text-right text-emerald-600 font-medium">
+                      {m.alacak > 0 ? formatCurrency(m.alacak, m.currency) : "-"}
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+
+          {/* Döviz bazlı alt toplam satırları */}
+          {currencySummaries.length > 0 && (
+            <div className="mt-4 border-t pt-4 space-y-1">
+              {currencySummaries.map((s) => (
+                <div
+                  key={s.currency}
+                  className="flex items-center justify-end gap-6 text-sm"
+                >
+                  <Badge variant="secondary" className="text-xs font-bold w-12 justify-center">
+                    {s.currency}
+                  </Badge>
+                  <span className="text-gray-500 w-40 text-right">
+                    Borç:{" "}
+                    <span className="font-semibold text-red-600">
+                      {formatCurrency(s.totalBorc, s.currency)}
+                    </span>
+                  </span>
+                  <span className="text-gray-500 w-40 text-right">
+                    Alacak:{" "}
+                    <span className="font-semibold text-emerald-600">
+                      {formatCurrency(s.totalAlacak, s.currency)}
+                    </span>
+                  </span>
+                  <span className="text-gray-500 w-44 text-right">
+                    Bakiye:{" "}
+                    <span
+                      className={`font-bold ${
+                        s.balance > 0
+                          ? "text-red-600"
+                          : s.balance < 0
+                          ? "text-emerald-600"
+                          : "text-gray-700"
+                      }`}
+                    >
+                      {formatCurrency(s.balance, s.currency)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
