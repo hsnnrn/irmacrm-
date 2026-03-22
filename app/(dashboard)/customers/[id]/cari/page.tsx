@@ -409,9 +409,9 @@ export default function CustomerCariPage() {
                       {s.currency}
                     </Badge>
                     {s.balance > 0
-                      ? "Müşteri Borçlu"
+                      ? "Borç Bakiyesi"
                       : s.balance < 0
-                      ? "Alacaklıyız"
+                      ? "Alacak Fazlası"
                       : "Bakiye Sıfır"}
                   </CardDescription>
                   <CardTitle
@@ -589,45 +589,53 @@ export default function CustomerCariPage() {
             </TableBody>
           </Table>
 
-          {/* Döviz bazlı alt toplam satırları */}
+          {/* Döviz bazlı alt toplam */}
           {currencySummaries.length > 0 && (
-            <div className="mt-4 border-t pt-4 space-y-1">
-              {currencySummaries.map((s) => (
-                <div
-                  key={s.currency}
-                  className="flex items-center justify-end gap-6 text-sm"
-                >
-                  <Badge variant="secondary" className="text-xs font-bold w-12 justify-center">
-                    {s.currency}
-                  </Badge>
-                  <span className="text-gray-500 w-40 text-right">
-                    Borç:{" "}
-                    <span className="font-semibold text-red-600">
-                      {formatCurrency(s.totalBorc, s.currency)}
-                    </span>
-                  </span>
-                  <span className="text-gray-500 w-40 text-right">
-                    Alacak:{" "}
-                    <span className="font-semibold text-emerald-600">
-                      {formatCurrency(s.totalAlacak, s.currency)}
-                    </span>
-                  </span>
-                  <span className="text-gray-500 w-44 text-right">
-                    Bakiye:{" "}
-                    <span
-                      className={`font-bold ${
-                        s.balance > 0
-                          ? "text-red-600"
-                          : s.balance < 0
-                          ? "text-emerald-600"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      {formatCurrency(s.balance, s.currency)}
-                    </span>
-                  </span>
-                </div>
-              ))}
+            <div className="mt-4 border-t pt-3">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-gray-400 uppercase tracking-wide">
+                    <th className="text-left pb-1.5 pl-1 font-semibold">Döviz</th>
+                    <th className="text-right pb-1.5 font-semibold">Toplam Borç</th>
+                    <th className="text-right pb-1.5 font-semibold">Toplam Alacak</th>
+                    <th className="text-right pb-1.5 font-semibold">Net Bakiye</th>
+                    <th className="text-right pb-1.5 pr-1 font-semibold">Durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currencySummaries.map((s) => (
+                    <tr key={s.currency} className="border-t border-gray-100">
+                      <td className="py-1.5 pl-1">
+                        <Badge variant="secondary" className="text-xs font-bold">
+                          {s.currency}
+                        </Badge>
+                      </td>
+                      <td className="py-1.5 text-right font-medium text-red-600 tabular-nums">
+                        {formatCurrency(s.totalBorc, s.currency)}
+                      </td>
+                      <td className="py-1.5 text-right font-medium text-emerald-600 tabular-nums">
+                        {formatCurrency(s.totalAlacak, s.currency)}
+                      </td>
+                      <td className={`py-1.5 text-right font-bold tabular-nums ${
+                        s.balance > 0 ? "text-red-600" : s.balance < 0 ? "text-emerald-600" : "text-gray-500"
+                      }`}>
+                        {formatCurrency(Math.abs(s.balance), s.currency)}
+                      </td>
+                      <td className="py-1.5 text-right pr-1">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          s.balance > 0
+                            ? "bg-red-50 text-red-600"
+                            : s.balance < 0
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-gray-100 text-gray-500"
+                        }`}>
+                          {s.balance > 0 ? "Borç Bakiyesi" : s.balance < 0 ? "Alacak Fazlası" : "Sıfır"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>

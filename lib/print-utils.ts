@@ -166,42 +166,45 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
       <div class="summary-card ${s.balance > 0 ? "card-debit" : s.balance < 0 ? "card-credit" : "card-zero"}">
         <div class="card-currency">${s.currency}</div>
         <div class="card-row">
-          <span class="card-label">Borç</span>
+          <span class="card-label">Toplam Borç</span>
           <span class="card-value c-debit">${fmt(s.totalBorc)}</span>
         </div>
         <div class="card-row">
-          <span class="card-label">Alacak</span>
+          <span class="card-label">Toplam Alacak</span>
           <span class="card-value c-credit">${fmt(s.totalAlacak)}</span>
         </div>
         <div class="card-divider"></div>
         <div class="card-row">
-          <span class="card-label card-label-bold">Bakiye</span>
+          <span class="card-label card-label-bold">Net Bakiye</span>
           <span class="card-value card-balance ${s.balance > 0 ? "c-debit" : s.balance < 0 ? "c-credit" : ""}">
             ${fmt(Math.abs(s.balance))}
           </span>
         </div>
         <div class="card-status-text ${s.balance > 0 ? "c-debit" : s.balance < 0 ? "c-credit" : "c-muted"}">
-          ${s.balance > 0 ? "Müşteri Borçlu" : s.balance < 0 ? "Alacaklıyız" : "Bakiye Sıfır"}
+          ${s.balance > 0 ? "Borç Bakiyesi" : s.balance < 0 ? "Alacak Fazlası" : "Bakiye Sıfır"}
         </div>
       </div>`
     )
     .join("");
+
+  // ── Watermark SVG (inline data URL) ───────────────────────────────────────
+  // SVG encoded as %23 = #, spaces as %20
+  const watermarkSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 260'%3E%3Ctext x='210' y='150' font-family='Arial,sans-serif' font-size='112' font-weight='900' text-anchor='middle' fill='%23C41E3A'%3EIRMA%3C/text%3E%3Ctext x='210' y='195' font-family='Arial,sans-serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23C41E3A' letter-spacing='12'%3EDI%C5%9E T%C4%B0CARET%3C/text%3E%3C/svg%3E`;
 
   // ── HTML ───────────────────────────────────────────────────────────────────
   const html = `<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cari Hesap Ekstresi — ${data.customerName}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
   <style>
     /* ── Reset & Base ──────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     @media print {
-      @page { size: A4; margin: 1.4cm 1.6cm; }
+      @page { size: A4 portrait; margin: 1.2cm 1.4cm; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
       .page-break-before { page-break-before: always; }
@@ -224,213 +227,162 @@ export function printCustomerLedger(data: CustomerLedgerPrintData): void {
       font-family: var(--font);
       color: var(--dark);
       background: #fff;
-      font-size: 11pt;
-      line-height: 1.5;
+      font-size: 10pt;
+      line-height: 1.4;
+      position: relative;
+    }
+
+    /* ── Filigran (Watermark) ──────────────────────────────── */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 50%; left: 50%;
+      width: 540px; height: 340px;
+      transform: translate(-50%, -50%) rotate(-22deg);
+      background-image: url("${watermarkSvg}");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain;
+      opacity: 0.055;
+      z-index: -1;
+      pointer-events: none;
     }
 
     /* ── Page wrapper ──────────────────────────────────────── */
-    .page { max-width: 210mm; margin: 0 auto; padding: 0; }
+    .page { max-width: 210mm; margin: 0 auto; }
 
     /* ── Header ────────────────────────────────────────────── */
     .doc-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding-bottom: 18px;
-      border-bottom: 2.5px solid var(--brand);
-      margin-bottom: 22px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding-bottom: 14px; border-bottom: 2.5px solid var(--brand); margin-bottom: 16px;
     }
-
-    .brand-block { display: flex; align-items: center; gap: 14px; }
-
+    .brand-block { display: flex; align-items: center; gap: 12px; }
     .brand-logo {
-      width: 44px; height: 44px; flex-shrink: 0;
-      background: var(--brand); border-radius: 10px;
+      width: 40px; height: 40px; flex-shrink: 0;
+      background: var(--brand); border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
     }
-    .brand-logo svg { width: 26px; height: 26px; fill: white; }
-
-    .brand-name {
-      font-size: 17pt; font-weight: 700; color: var(--brand);
-      letter-spacing: -0.3px; line-height: 1.15;
-    }
-    .brand-sub {
-      font-size: 8pt; color: var(--soft); margin-top: 2px; font-weight: 400;
-    }
-    .brand-web {
-      font-size: 8pt; color: var(--brand); font-weight: 500; margin-top: 1px;
-      text-decoration: none;
-    }
-
+    .brand-logo svg { width: 24px; height: 24px; fill: white; }
+    .brand-name { font-size: 16pt; font-weight: 700; color: var(--brand); letter-spacing: -0.3px; line-height: 1.15; }
+    .brand-sub  { font-size: 7.5pt; color: var(--soft); margin-top: 2px; }
+    .brand-web  { font-size: 7.5pt; color: var(--brand); font-weight: 500; margin-top: 1px; text-decoration: none; }
     .doc-meta { text-align: right; }
-    .doc-title {
-      font-size: 14pt; font-weight: 700; color: var(--dark);
-      letter-spacing: -0.3px;
-    }
-    .doc-subtitle { font-size: 9pt; color: var(--soft); margin-top: 3px; }
-    .doc-number {
-      display: inline-block; margin-top: 6px;
-      font-size: 9pt; font-family: 'Courier New', monospace;
+    .doc-title    { font-size: 13pt; font-weight: 700; color: var(--dark); letter-spacing: -0.3px; }
+    .doc-subtitle { font-size: 8pt; color: var(--soft); margin-top: 2px; }
+    .doc-number   {
+      display: inline-block; margin-top: 5px;
+      font-size: 8pt; font-family: 'Courier New', monospace;
       background: var(--row-alt); border: 1px solid var(--border);
-      border-radius: 5px; padding: 3px 10px; color: var(--mid);
+      border-radius: 4px; padding: 2px 9px; color: var(--mid);
     }
 
-    /* ── Customer + Document Info ──────────────────────────── */
-    .info-row {
-      display: flex; gap: 16px; margin-bottom: 20px;
-    }
+    /* ── Info Row ──────────────────────────────────────────── */
+    .info-row { display: flex; gap: 14px; margin-bottom: 16px; }
     .info-box {
       flex: 1; background: var(--row-alt);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: 7px; padding: 12px 14px;
     }
     .info-box-label {
-      font-size: 7.5pt; font-weight: 600; color: var(--soft);
-      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px;
+      font-size: 7pt; font-weight: 600; color: var(--soft);
+      text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px;
     }
-    .info-box-name {
-      font-size: 13pt; font-weight: 700; color: var(--dark);
-      margin-bottom: 4px; line-height: 1.2;
-    }
-    .info-detail {
-      font-size: 9pt; color: var(--mid); line-height: 1.7;
-    }
+    .info-box-name { font-size: 12pt; font-weight: 700; color: var(--dark); margin-bottom: 3px; line-height: 1.2; }
+    .info-detail   { font-size: 8pt; color: var(--mid); line-height: 1.6; }
     .info-detail strong { font-weight: 600; color: var(--dark); }
-
     .doc-info-box {
-      min-width: 200px; background: var(--brand-light);
-      border: 1px solid #FECDD3; border-radius: 8px;
-      padding: 14px 16px;
+      min-width: 190px; background: var(--brand-light);
+      border: 1px solid #FECDD3; border-radius: 7px; padding: 12px 14px;
     }
-    .doc-info-row { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; }
+    .doc-info-row { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
     .doc-info-row:last-child { margin-bottom: 0; }
-    .doc-info-key { font-size: 8.5pt; color: var(--soft); }
-    .doc-info-val { font-size: 8.5pt; font-weight: 600; color: var(--dark); text-align: right; }
+    .doc-info-key { font-size: 8pt; color: var(--soft); }
+    .doc-info-val { font-size: 8pt; font-weight: 600; color: var(--dark); text-align: right; }
 
-    /* ── Section title ─────────────────────────────────────── */
-    .section-head {
-      display: flex; align-items: center; gap: 8px;
-      margin: 22px 0 10px 0;
-    }
-    .section-head-bar {
-      width: 4px; height: 18px; background: var(--brand); border-radius: 2px; flex-shrink: 0;
-    }
-    .section-head-text {
-      font-size: 10pt; font-weight: 700; color: var(--dark);
-      text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .section-head-note {
-      margin-left: auto; font-size: 8pt; color: var(--soft); font-style: italic;
-    }
+    /* ── Section Head ──────────────────────────────────────── */
+    .section-head { display: flex; align-items: center; gap: 7px; margin: 16px 0 8px 0; }
+    .section-head-bar  { width: 3px; height: 16px; background: var(--brand); border-radius: 2px; flex-shrink: 0; }
+    .section-head-text { font-size: 9pt; font-weight: 700; color: var(--dark); text-transform: uppercase; letter-spacing: 0.5px; }
+    .section-head-note { margin-left: auto; font-size: 7pt; color: var(--soft); font-style: italic; }
 
-    /* ── Movements Table ───────────────────────────────────── */
-    .ledger-table {
-      width: 100%; border-collapse: collapse;
-      font-size: 9pt; margin-bottom: 4px;
-    }
+    /* ── Movements Table — Compact ─────────────────────────── */
+    .ledger-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-bottom: 4px; }
 
-    .ledger-table thead tr {
-      background: var(--dark);
-    }
+    .ledger-table thead tr { background: var(--dark); }
     .ledger-table thead th {
-      padding: 9px 10px; color: #fff;
-      font-size: 8pt; font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.4px;
-      border: none;
+      padding: 6px 8px; color: #fff;
+      font-size: 7pt; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.3px; border: none;
     }
-    .ledger-table thead th:first-child { border-radius: 6px 0 0 0; }
-    .ledger-table thead th:last-child  { border-radius: 0 6px 0 0; }
+    .ledger-table thead th:first-child { border-radius: 5px 0 0 0; }
+    .ledger-table thead th:last-child  { border-radius: 0 5px 0 0; }
 
     .ledger-table tbody td {
-      padding: 7px 10px;
-      border-bottom: 1px solid var(--border);
+      padding: 4px 8px;
+      border-bottom: 1px solid #F0F2F5;
       vertical-align: middle;
     }
     .row-even td { background: #fff; }
     .row-odd  td { background: var(--row-alt); }
-
     .ledger-table tbody tr:last-child td { border-bottom: 2px solid var(--dark); }
 
-    .col-date  { width: 72px; white-space: nowrap; color: var(--mid); font-size: 8.5pt; }
-    .col-docno { width: 90px; font-size: 8pt; white-space: nowrap; color: var(--mid); }
-    .col-desc  { color: var(--dark); font-weight: 500; }
-    .col-status{ width: 90px; }
-    .col-cur   { width: 46px; }
-    .col-amount{ width: 88px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .col-date   { width: 64px; white-space: nowrap; color: var(--mid); }
+    .col-docno  { width: 80px; white-space: nowrap; color: var(--mid); }
+    .col-desc   { color: var(--dark); font-weight: 500; }
+    .col-status { width: 76px; }
+    .col-cur    { width: 40px; }
+    .col-amount { width: 80px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-    .mono { font-family: 'Courier New', monospace; }
+    .mono { font-family: 'Courier New', monospace; font-size: 7pt; }
     .text-right  { text-align: right; }
     .text-center { text-align: center; }
 
     .status-pill {
-      display: inline-block; font-size: 7.5pt; font-weight: 500;
-      padding: 2px 7px; border-radius: 20px;
+      display: inline-block; font-size: 6.5pt; font-weight: 500;
+      padding: 1px 5px; border-radius: 20px;
       background: #F3F4F6; color: var(--mid); white-space: nowrap;
       border: 1px solid var(--border);
     }
-
-    .cur-tag {
-      display: inline-block; font-size: 8pt; font-weight: 700;
-      padding: 2px 6px; border-radius: 4px; letter-spacing: 0.3px;
-    }
+    .cur-tag { display: inline-block; font-size: 7pt; font-weight: 700; padding: 1px 5px; border-radius: 3px; }
     .cur-USD { background: #EFF6FF; color: #1D4ED8; }
     .cur-EUR { background: #F0FDF4; color: #15803D; }
     .cur-TRY { background: #FFF7ED; color: #C2410C; }
     .cur-RUB { background: #FFF1F2; color: #BE123C; }
 
-    .c-debit  { color: var(--debit);  }
+    .c-debit  { color: var(--debit); }
     .c-credit { color: var(--credit); }
     .c-muted  { color: #9CA3AF; }
 
-    .empty-row td {
-      text-align: center; padding: 32px; color: var(--soft);
-      font-style: italic; background: var(--row-alt);
-    }
+    .empty-row td { text-align: center; padding: 24px; color: var(--soft); font-style: italic; background: var(--row-alt); }
 
-    /* ── Currency Summary ──────────────────────────────────── */
-    .summary-grid {
-      display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;
-    }
-
+    /* ── Currency Summary Cards ────────────────────────────── */
+    .summary-grid { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
     .summary-card {
-      flex: 1; min-width: 140px; max-width: 200px;
-      border-radius: 10px; padding: 14px 16px;
+      flex: 1; min-width: 130px; max-width: 190px;
+      border-radius: 9px; padding: 12px 14px;
       border: 1.5px solid var(--border);
     }
     .card-debit  { border-color: #FECACA; background: #FFF5F5; }
     .card-credit { border-color: #A7F3D0; background: #F0FDF9; }
     .card-zero   { background: var(--row-alt); }
-
-    .card-currency {
-      font-size: 15pt; font-weight: 800; color: var(--dark);
-      margin-bottom: 10px; letter-spacing: -0.5px;
-    }
-    .card-row {
-      display: flex; justify-content: space-between; align-items: baseline;
-      margin-bottom: 4px;
-    }
-    .card-label { font-size: 8pt; color: var(--soft); }
+    .card-currency { font-size: 14pt; font-weight: 800; color: var(--dark); margin-bottom: 8px; letter-spacing: -0.5px; }
+    .card-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; }
+    .card-label { font-size: 7.5pt; color: var(--soft); }
     .card-label-bold { font-weight: 700; color: var(--dark); }
-    .card-value { font-size: 9pt; font-weight: 600; font-variant-numeric: tabular-nums; }
-    .card-balance { font-size: 11pt; font-weight: 800; }
-    .card-divider { height: 1px; background: var(--border); margin: 8px 0; }
-    .card-status-text { font-size: 8pt; font-weight: 600; margin-top: 4px; text-align: right; }
+    .card-value   { font-size: 8pt; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .card-balance { font-size: 10pt; font-weight: 800; }
+    .card-divider { height: 1px; background: var(--border); margin: 6px 0; }
+    .card-status-text { font-size: 7.5pt; font-weight: 600; margin-top: 3px; text-align: right; }
 
     /* ── Footer ────────────────────────────────────────────── */
     .doc-footer {
-      margin-top: 32px; padding-top: 12px;
+      margin-top: 24px; padding-top: 10px;
       border-top: 1px solid var(--border);
       display: flex; justify-content: space-between; align-items: center;
     }
-    .footer-brand { font-size: 8pt; color: var(--soft); }
+    .footer-brand { font-size: 7.5pt; color: var(--soft); }
     .footer-brand strong { color: var(--brand); font-weight: 700; }
-    .footer-note  { font-size: 7.5pt; color: var(--soft); text-align: right; }
-
-    /* ── Disclaimer note ───────────────────────────────────── */
-    .disclaimer {
-      margin-top: 10px; font-size: 7.5pt; color: var(--soft);
-      font-style: italic; text-align: center;
-    }
+    .footer-note  { font-size: 7pt; color: var(--soft); text-align: right; }
+    .disclaimer { margin-top: 8px; font-size: 7pt; color: var(--soft); font-style: italic; text-align: center; }
   </style>
 </head>
 <body>
