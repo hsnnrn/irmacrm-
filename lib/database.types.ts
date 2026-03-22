@@ -85,14 +85,15 @@ export interface Database {
           loading_point: string
           unloading_point: string
           cargo_description: string | null
+          vehicle_plate: string | null
           sales_price: number | null
           sales_currency: string
           cost_price: number | null
           cost_currency: string
           estimated_profit: number | null
           exchange_rates_snapshot: Json | null
-          sales_exchange_rate?: number | null
-          cost_exchange_rate?: number | null
+          sales_exchange_rate: number | null
+          cost_exchange_rate: number | null
           status: string
           supplier_ref_no: string | null
           departure_date: string | null
@@ -109,12 +110,15 @@ export interface Database {
           loading_point: string
           unloading_point: string
           cargo_description?: string | null
+          vehicle_plate?: string | null
           sales_price?: number | null
           sales_currency?: string
           cost_price?: number | null
           cost_currency?: string
           estimated_profit?: number | null
           exchange_rates_snapshot?: Json | null
+          sales_exchange_rate?: number | null
+          cost_exchange_rate?: number | null
           status?: string
           supplier_ref_no?: string | null
           departure_date?: string | null
@@ -131,12 +135,15 @@ export interface Database {
           loading_point?: string
           unloading_point?: string
           cargo_description?: string | null
+          vehicle_plate?: string | null
           sales_price?: number | null
           sales_currency?: string
           cost_price?: number | null
           cost_currency?: string
           estimated_profit?: number | null
           exchange_rates_snapshot?: Json | null
+          sales_exchange_rate?: number | null
+          cost_exchange_rate?: number | null
           status?: string
           supplier_ref_no?: string | null
           departure_date?: string | null
@@ -270,6 +277,12 @@ export interface Database {
           departure_date: string | null
           delivery_date: string | null
           notes: string | null
+          sales_price: number | null
+          sales_currency: string | null
+          cost_price: number | null
+          cost_currency: string | null
+          sales_exchange_rate: number | null
+          cost_exchange_rate: number | null
           created_by: string | null
           created_at: string
           updated_at: string
@@ -284,6 +297,12 @@ export interface Database {
           departure_date?: string | null
           delivery_date?: string | null
           notes?: string | null
+          sales_price?: number | null
+          sales_currency?: string | null
+          cost_price?: number | null
+          cost_currency?: string | null
+          sales_exchange_rate?: number | null
+          cost_exchange_rate?: number | null
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -298,6 +317,12 @@ export interface Database {
           departure_date?: string | null
           delivery_date?: string | null
           notes?: string | null
+          sales_price?: number | null
+          sales_currency?: string | null
+          cost_price?: number | null
+          cost_currency?: string | null
+          sales_exchange_rate?: number | null
+          cost_exchange_rate?: number | null
           created_by?: string | null
           created_at?: string
           updated_at?: string

@@ -34,11 +34,28 @@ export type PositionWithInvoices = Position & {
   invoices: Invoice[];
 };
 
+type PositionTrip = {
+  id: string;
+  position_id: string;
+  trip_no: number;
+  loading_point: string;
+  unloading_point: string;
+  sales_price: number | null;
+  sales_currency: string | null;
+  cost_price: number | null;
+  cost_currency: string | null;
+  sales_exchange_rate: number | null;
+  cost_exchange_rate: number | null;
+  departure_date: string | null;
+  created_at: string;
+};
+
 export type CustomerLedgerData = {
   customer: Customer | null;
   positions: PositionWithInvoices[];
   allInvoices: Invoice[];
   payments: CustomerPayment[];
+  trips: PositionTrip[];
 };
 
 export function useCustomerLedger(customerId: string | null) {
@@ -46,7 +63,7 @@ export function useCustomerLedger(customerId: string | null) {
     queryKey: ["customer-ledger", customerId],
     queryFn: async () => {
       if (!customerId) {
-        return { customer: null, positions: [], allInvoices: [], payments: [] };
+        return { customer: null, positions: [], allInvoices: [], payments: [], trips: [] };
       }
 
       // Fetch customer
@@ -93,6 +110,20 @@ export function useCustomerLedger(customerId: string | null) {
 
       const paymentList = (payments || []) as CustomerPayment[];
 
+      // Fetch position trips (with financial data) for all positions
+      let tripList: PositionTrip[] = [];
+      if (positionIds.length > 0) {
+        const { data: tripsData, error: tripsError } = await supabase
+          .from("position_trips")
+          .select("id, position_id, trip_no, loading_point, unloading_point, sales_price, sales_currency, cost_price, cost_currency, sales_exchange_rate, cost_exchange_rate, departure_date, created_at")
+          .in("position_id", positionIds)
+          .order("created_at", { ascending: true });
+
+        if (!tripsError) {
+          tripList = (tripsData || []) as PositionTrip[];
+        }
+      }
+
       // Group invoices by position and attach to positions
       const positionsWithInvoices: PositionWithInvoices[] = positions.map(
         (pos) => ({
@@ -106,6 +137,7 @@ export function useCustomerLedger(customerId: string | null) {
         positions: positionsWithInvoices,
         allInvoices: invoiceList,
         payments: paymentList,
+        trips: tripList,
       };
     },
     enabled: !!customerId,

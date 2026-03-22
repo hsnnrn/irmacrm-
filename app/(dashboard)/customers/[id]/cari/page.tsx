@@ -92,11 +92,14 @@ export default function CustomerCariPage() {
 
     const items: RawItem[] = [];
 
+    const allTrips = data?.trips || [];
+
     // Borç: Satış faturaları varsa onlar (kendi döviz cinsinde), yoksa pozisyon tutarları
     if (salesInvoices.length > 0) {
       salesInvoices.forEach((inv) => {
         const position = pos.find((p) => p.id === inv.position_id);
         const posLabel = position ? `Poz #${position.position_no}` : "";
+        const plateSuffix = (position as any)?.vehicle_plate ? ` [${(position as any).vehicle_plate}]` : "";
         const routeDesc = position
           ? `${position.loading_point} → ${position.unloading_point}`
           : "";
@@ -109,7 +112,7 @@ export default function CustomerCariPage() {
           docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
           type: "BORC",
           description: position
-            ? `${posLabel} - ${routeDesc} - Satış Faturası`
+            ? `${posLabel}${plateSuffix} - ${routeDesc} - Satış Faturası`
             : "Satış Faturası",
           amount: inv.amount,
           currency: inv.currency,
@@ -124,11 +127,12 @@ export default function CustomerCariPage() {
             STATUS_LABELS[position.status as keyof typeof STATUS_LABELS] ||
             position.status ||
             "-";
+          const plateSuffix = (position as any)?.vehicle_plate ? ` [${(position as any).vehicle_plate}]` : "";
           items.push({
             date: new Date(position.created_at),
             docNo: `Poz #${position.position_no}`,
             type: "BORC",
-            description: `Poz #${position.position_no} - ${position.loading_point} → ${position.unloading_point} - Satış Tutarı`,
+            description: `Poz #${position.position_no}${plateSuffix} - ${position.loading_point} → ${position.unloading_point} - Satış Tutarı`,
             amount: price,
             currency: (position.sales_currency as string) || accountCurrency,
             status: statusLabel,
@@ -136,6 +140,27 @@ export default function CustomerCariPage() {
         }
       });
     }
+
+    // Ek Sefer borçları: sadece sales_price girilmiş seferler için
+    allTrips.forEach((trip) => {
+      const tripSalesPrice = trip.sales_price || 0;
+      if (tripSalesPrice > 0 && trip.sales_currency) {
+        const position = pos.find((p) => p.id === trip.position_id);
+        const plateSuffix = (position as any)?.vehicle_plate ? ` [${(position as any).vehicle_plate}]` : "";
+        const statusLabel = position
+          ? STATUS_LABELS[position.status as keyof typeof STATUS_LABELS] || position.status || "-"
+          : "-";
+        items.push({
+          date: new Date(trip.departure_date || trip.created_at),
+          docNo: `Poz #${position?.position_no || "?"} - Sefer #${trip.trip_no}`,
+          type: "BORC",
+          description: `Ek Sefer #${trip.trip_no}${plateSuffix} - ${trip.loading_point} → ${trip.unloading_point}`,
+          amount: tripSalesPrice,
+          currency: trip.sales_currency,
+          status: statusLabel,
+        });
+      }
+    });
 
     // Manuel cari hareketler — kendi döviz cinsinde
     payments.forEach((p) => {
@@ -474,6 +499,7 @@ export default function CustomerCariPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Poz. No</TableHead>
+                  <TableHead>Plaka</TableHead>
                   <TableHead>Rota</TableHead>
                   <TableHead className="text-right">Satış Tutarı</TableHead>
                   <TableHead>Durum</TableHead>
@@ -484,7 +510,7 @@ export default function CustomerCariPage() {
               <TableBody>
                 {positions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
                       Henüz sefer kaydı bulunmuyor.
                     </TableCell>
                   </TableRow>
@@ -498,6 +524,15 @@ export default function CustomerCariPage() {
                         >
                           #{pos.position_no}
                         </Link>
+                      </TableCell>
+                      <TableCell>
+                        {(pos as any).vehicle_plate ? (
+                          <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded border">
+                            {(pos as any).vehicle_plate}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {pos.loading_point} → {pos.unloading_point}

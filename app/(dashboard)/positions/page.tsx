@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
-import { STATUS_LABELS, STATUS_STYLES } from "@/lib/position-utils";
+import { STATUS_LABELS, STATUS_STYLES, getPositionExchangeRate } from "@/lib/position-utils";
 import { cn } from "@/lib/utils";
 import type { PositionStatus } from "@/lib/position-utils";
 import { usePositions } from "@/hooks/use-positions";
@@ -81,7 +81,8 @@ export default function PositionsPage() {
       position.position_no.toString().includes(searchTerm) ||
       customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       position.loading_point.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      position.unloading_point.toLowerCase().includes(searchTerm.toLowerCase());
+      position.unloading_point.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ((position as any).vehicle_plate || "").toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       filterStatus === "ALL" || position.status === filterStatus;
@@ -117,11 +118,12 @@ export default function PositionsPage() {
         "Pozisyon No",
         "Müşteri",
         "Tedarikçi",
+        "Plaka",
         "Yükleme",
         "Boşaltma",
         "Satış",
         "Maliyet",
-        "Kar",
+        "Kar (Net)",
         "Durum",
         "Oluşturma Tarihi",
       ],
@@ -129,6 +131,7 @@ export default function PositionsPage() {
         pos.position_no,
         (pos.customers as any)?.company_name || "-",
         (pos.suppliers as any)?.company_name || "-",
+        pos.vehicle_plate || "-",
         pos.loading_point,
         pos.unloading_point,
         formatCurrencyForExport(pos.sales_price || 0, pos.sales_currency || "TRY"),
@@ -162,10 +165,11 @@ export default function PositionsPage() {
         "Pozisyon No",
         "Müşteri",
         "Tedarikçi",
+        "Plaka",
         "Yükleme → Boşaltma",
         "Satış",
         "Maliyet",
-        "Kar",
+        "Kar (Net)",
         "Durum",
         "Oluşturma Tarihi",
       ],
@@ -173,6 +177,7 @@ export default function PositionsPage() {
         `#${pos.position_no}`,
         (pos.customers as any)?.company_name || "-",
         (pos.suppliers as any)?.company_name || "-",
+        pos.vehicle_plate || "-",
         `${pos.loading_point} → ${pos.unloading_point}`,
         formatCurrencyForExport(pos.sales_price || 0, pos.sales_currency || "TRY"),
         formatCurrencyForExport(pos.cost_price || 0, pos.cost_currency || "TRY"),
@@ -230,9 +235,18 @@ export default function PositionsPage() {
       p.status === "READY_TO_DEPART" ||
       p.status === "DELIVERED"
   ).length;
-  // Toplam Kar: COMPLETED pozisyonların faturalarından (merkezi finance – TRY)
-  const completedIds = new Set((positions || []).filter((p: any) => p.status === "COMPLETED").map((p: any) => p.id));
-  const totalProfit = computeProfitForPositions(invoices || [], completedIds, "TRY", exchangeRates ?? undefined);
+  // Toplam Kar: COMPLETED pozisyonlar için önce fatura bazlı, fatura yoksa estimated_profit bazlı (TRY)
+  const completedPositions = (positions || []).filter((p: any) => p.status === "COMPLETED");
+  const completedIds = new Set(completedPositions.map((p: any) => p.id));
+  const invoiceBasedProfit = computeProfitForPositions(invoices || [], completedIds, "TRY", exchangeRates ?? undefined);
+  const positionsWithInvoiceIds = new Set((invoices || []).map((inv: any) => inv.position_id));
+  const estimatedFallbackProfit = completedPositions
+    .filter((p: any) => !positionsWithInvoiceIds.has(p.id))
+    .reduce((sum: number, p: any) => {
+      const salesRate = getPositionExchangeRate(p, "sales");
+      return sum + (p.estimated_profit || 0) * salesRate;
+    }, 0);
+  const totalProfit = invoiceBasedProfit + estimatedFallbackProfit;
 
   return (
     <div className="space-y-6">
@@ -461,6 +475,14 @@ export default function PositionsPage() {
                 </TableHead>
                 <TableHead>
                   <SortableHeader
+                    label="Plaka"
+                    sortKey="vehicle_plate"
+                    currentSort={sortConfig}
+                    onSort={requestSort}
+                  />
+                </TableHead>
+                <TableHead>
+                  <SortableHeader
                     label="Rota"
                     sortKey="loading_point"
                     currentSort={sortConfig}
@@ -495,7 +517,7 @@ export default function PositionsPage() {
                 </TableHead>
                 <TableHead className="text-right">
                   <SortableHeader
-                    label="Kar"
+                    label="Kar (Net)"
                     sortKey="estimated_profit"
                     currentSort={sortConfig}
                     onSort={requestSort}
@@ -516,7 +538,7 @@ export default function PositionsPage() {
             <TableBody>
               {paginatedPositions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center">
+                  <TableCell colSpan={10} className="h-24 text-center">
                     <p className="text-gray-500">Henüz pozisyon eklenmemiş.</p>
                     <Link href="/positions/create">
                       <Button className="mt-2" size="sm">
@@ -541,6 +563,15 @@ export default function PositionsPage() {
                         {(position.suppliers as any)?.company_name || "Tedarikçi"}
                       </p>
                     </div>
+                  </TableCell>
+                  <TableCell className="align-top whitespace-nowrap">
+                    {(position as any).vehicle_plate ? (
+                      <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded border">
+                        {(position as any).vehicle_plate}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="align-top">
                     <div className="text-sm space-y-1">

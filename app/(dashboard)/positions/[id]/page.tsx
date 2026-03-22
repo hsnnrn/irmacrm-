@@ -171,11 +171,16 @@ export default function PositionDetailPage({
     departure_date: "",
     delivery_date: "",
     notes: "",
+    sales_price: "",
+    sales_currency: "EUR",
+    cost_price: "",
+    cost_currency: "EUR",
   });
   const [selectedDocType, setSelectedDocType] = useState<string | null>(null);
   const [selectedDocuments, setSelectedDocuments] = useState<any[]>([]);
   const [expandedDocTypes, setExpandedDocTypes] = useState<Set<string>>(new Set());
   const [isEditingFinancials, setIsEditingFinancials] = useState(false);
+  const [isSavingFinancials, setIsSavingFinancials] = useState(false);
   const [financialData, setFinancialData] = useState({
     sales_price: "",
     sales_currency: "USD",
@@ -393,7 +398,8 @@ export default function PositionDetailPage({
   };
 
   const handleSaveFinancials = async () => {
-    if (!positionId) return;
+    if (!positionId || isSavingFinancials) return;
+    setIsSavingFinancials(true);
 
     try {
       const salesPrice = financialData.sales_price ? parseFloat(financialData.sales_price) : null;
@@ -407,13 +413,21 @@ export default function PositionDetailPage({
         ? 1 
         : getExchangeRate(financialData.cost_currency);
       
-      // Calculate estimated profit in TRY first
+      // Calculate estimated profit in TRY first, including all current payments
       const salesInTry = salesPrice ? salesPrice * salesExchangeRate : 0;
-      const costInTry = costPrice ? costPrice * costExchangeRate : 0;
+      let costInTry = costPrice ? costPrice * costExchangeRate : 0;
+
+      // Include all payments in profit calculation for accurate estimated_profit
+      if (paymentsData && paymentsData.length > 0) {
+        paymentsData.forEach((payment: any) => {
+          const paymentRate = payment.exchange_rate || 1;
+          costInTry += payment.amount * paymentRate;
+        });
+      }
+
       const profitInTry = salesInTry - costInTry;
       
-      // Convert profit to sales currency (not TRY) for storage
-      // Kar her zaman satış para biriminde kaydedilmeli
+      // Store profit in sales currency
       const estimatedProfit = financialData.sales_currency === "TRY"
         ? profitInTry
         : (salesExchangeRate !== 0 ? profitInTry / salesExchangeRate : 0);
@@ -452,6 +466,8 @@ export default function PositionDetailPage({
         description: translateSupabaseError(error),
         variant: "destructive",
       });
+    } finally {
+      setIsSavingFinancials(false);
     }
   };
 
@@ -466,6 +482,33 @@ export default function PositionDetailPage({
       });
     }
     setIsEditingFinancials(false);
+  };
+
+  // Recalculate and persist estimated_profit after payment changes
+  const recalculateProfit = async (updatedPayments?: any[]) => {
+    if (!positionId || !typedPosition) return;
+    const allPayments = updatedPayments ?? paymentsData ?? [];
+    const salesRate = getPositionExchangeRate(typedPosition, "sales");
+    const costRate = getPositionExchangeRate(typedPosition, "cost");
+    const salesInTry = (typedPosition.sales_price || 0) * salesRate;
+    let costInTry = (typedPosition.cost_price || 0) * costRate;
+    allPayments.forEach((payment: any) => {
+      const paymentRate = payment.exchange_rate || 1;
+      costInTry += payment.amount * paymentRate;
+    });
+    const profitInTry = salesInTry - costInTry;
+    const estimatedProfit = (typedPosition.sales_currency === "TRY" || !salesRate)
+      ? profitInTry
+      : profitInTry / salesRate;
+    try {
+      await updatePosition.mutateAsync({
+        id: positionId,
+        estimated_profit: estimatedProfit,
+        updated_at: new Date().toISOString(),
+      } as any);
+    } catch {
+      // Sessiz hata — kar güncelleme kritik değil
+    }
   };
 
   const handleSavePayment = async () => {
@@ -510,6 +553,9 @@ export default function PositionDetailPage({
       });
       
       setPaymentDialogOpen(false);
+
+      // Estimated profit'i ödemeler dahil olarak güncelle (arka planda)
+      await recalculateProfit();
     } catch (error) {
       toast({
         title: "Hata!",
@@ -532,6 +578,11 @@ export default function PositionDetailPage({
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      const tripSalesPrice = tripFormData.sales_price ? parseFloat(tripFormData.sales_price) : null;
+      const tripCostPrice = tripFormData.cost_price ? parseFloat(tripFormData.cost_price) : null;
+      const tripSalesRate = tripFormData.sales_currency === "TRY" ? 1 : getExchangeRate(tripFormData.sales_currency);
+      const tripCostRate = tripFormData.cost_currency === "TRY" ? 1 : getExchangeRate(tripFormData.cost_currency);
+
       await createTrip.mutateAsync({
         position_id: positionId,
         loading_point: tripFormData.loading_point,
@@ -540,8 +591,14 @@ export default function PositionDetailPage({
         departure_date: tripFormData.departure_date || null,
         delivery_date: tripFormData.delivery_date || null,
         notes: tripFormData.notes || null,
+        sales_price: tripSalesPrice,
+        sales_currency: tripFormData.sales_currency || null,
+        cost_price: tripCostPrice,
+        cost_currency: tripFormData.cost_currency || null,
+        sales_exchange_rate: tripSalesPrice ? tripSalesRate : null,
+        cost_exchange_rate: tripCostPrice ? tripCostRate : null,
         created_by: user?.id || null,
-      });
+      } as any);
 
       toast({
         title: "Başarılı!",
@@ -555,6 +612,10 @@ export default function PositionDetailPage({
         departure_date: "",
         delivery_date: "",
         notes: "",
+        sales_price: "",
+        sales_currency: "EUR",
+        cost_price: "",
+        cost_currency: "EUR",
       });
       setTripDialogOpen(false);
     } catch (error) {
@@ -625,7 +686,7 @@ export default function PositionDetailPage({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Müşteri</CardDescription>
@@ -640,7 +701,15 @@ export default function PositionDetailPage({
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Tahmini Kar</CardDescription>
+            <CardDescription>Araç Plakası</CardDescription>
+            <CardTitle className="font-mono text-lg">
+              {(typedPosition as any).vehicle_plate || <span className="text-gray-400 text-sm font-normal">Belirtilmedi</span>}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Net Kar (Tahmini)</CardDescription>
             <CardTitle className="text-2xl font-bold text-green-600">
               {formatCurrency(typedPosition.estimated_profit ?? 0, typedPosition.sales_currency)}
             </CardTitle>
@@ -977,9 +1046,9 @@ export default function PositionDetailPage({
                       <Button
                         size="sm"
                         onClick={handleSaveFinancials}
-                        disabled={updatePosition.isPending}
+                        disabled={updatePosition.isPending || isSavingFinancials}
                       >
-                        {updatePosition.isPending ? (
+                        {(updatePosition.isPending || isSavingFinancials) ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                           <Save className="mr-2 h-4 w-4" />
@@ -1153,9 +1222,13 @@ export default function PositionDetailPage({
                     ? financialData.cost_currency
                     : typedPosition.cost_currency;
                   
-                  // Get exchange rates
-                  const salesRate = getPositionExchangeRate(typedPosition, "sales");
-                  const costRate = getPositionExchangeRate(typedPosition, "cost");
+                  // In edit mode use live rates, otherwise use stored rates
+                  const salesRate = canEditFinancials && isEditingFinancials
+                    ? (salesCurrency === "TRY" ? 1 : getExchangeRate(salesCurrency))
+                    : getPositionExchangeRate(typedPosition, "sales");
+                  const costRate = canEditFinancials && isEditingFinancials
+                    ? (costCurrency === "TRY" ? 1 : getExchangeRate(costCurrency))
+                    : getPositionExchangeRate(typedPosition, "cost");
                   
                   // Calculate profit in TRY (always use TRY for accurate calculation)
                   const salesInTry = salesPrice * salesRate;
@@ -1282,9 +1355,12 @@ export default function PositionDetailPage({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm("Bu ödemeyi silmek istediğinize emin misiniz?")) {
-                              deletePayment.mutate(payment.id);
+                              await deletePayment.mutateAsync(payment.id);
+                              // Filtered payments without the deleted one for profit recalc
+                              const remaining = (paymentsData || []).filter((p: any) => p.id !== payment.id);
+                              await recalculateProfit(remaining);
                             }
                           }}
                           className="ml-2"
@@ -1463,6 +1539,22 @@ export default function PositionDetailPage({
                                 <div>
                                   <p className="text-xs text-gray-500">Teslimat Tarihi</p>
                                   <p className="font-medium">{formatDate(trip.delivery_date)}</p>
+                                </div>
+                              )}
+                              {(trip as any).sales_price && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Navlun / Satış</p>
+                                  <p className="font-medium text-green-700">
+                                    {formatCurrency((trip as any).sales_price, (trip as any).sales_currency || "EUR")}
+                                  </p>
+                                </div>
+                              )}
+                              {(trip as any).cost_price && (
+                                <div>
+                                  <p className="text-xs text-gray-500">Maliyet</p>
+                                  <p className="font-medium text-red-700">
+                                    {formatCurrency((trip as any).cost_price, (trip as any).cost_currency || "EUR")}
+                                  </p>
                                 </div>
                               )}
                               {trip.notes && (
@@ -1649,6 +1741,72 @@ export default function PositionDetailPage({
                 placeholder="Ek bilgiler..."
                 rows={3}
               />
+            </div>
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm font-medium text-gray-700">Finansal Bilgiler (Opsiyonel)</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="trip_sales_price">Navlun / Satış Fiyatı</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="trip_sales_price"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={tripFormData.sales_price}
+                      onChange={(e) =>
+                        setTripFormData((prev) => ({ ...prev, sales_price: e.target.value }))
+                      }
+                      className="flex-1"
+                    />
+                    <Select
+                      value={tripFormData.sales_currency}
+                      onValueChange={(v) => setTripFormData((prev) => ({ ...prev, sales_currency: v }))}
+                    >
+                      <SelectTrigger className="w-[80px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TRY">TRY</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="RUB">RUB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="trip_cost_price">Maliyet Fiyatı</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="trip_cost_price"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={tripFormData.cost_price}
+                      onChange={(e) =>
+                        setTripFormData((prev) => ({ ...prev, cost_price: e.target.value }))
+                      }
+                      className="flex-1"
+                    />
+                    <Select
+                      value={tripFormData.cost_currency}
+                      onValueChange={(v) => setTripFormData((prev) => ({ ...prev, cost_currency: v }))}
+                    >
+                      <SelectTrigger className="w-[80px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TRY">TRY</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="RUB">RUB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">Satış fiyatı girilirse müşteri cari hesabına da yansıtılır.</p>
             </div>
           </div>
           <DialogFooter>
