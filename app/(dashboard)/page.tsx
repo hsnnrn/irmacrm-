@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   TrendingUp,
+  TrendingDown,
   Package,
   AlertCircle,
   DollarSign,
@@ -20,142 +21,224 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity,
+  Target,
+  Globe,
+  Clock,
+  Banknote,
+  PieChart,
+  RefreshCw,
 } from "lucide-react";
 import { usePositions } from "@/hooks/use-positions";
 import { useInvoices } from "@/hooks/use-invoices";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
-import { computeProfitFromInvoices, computeMonthlyProfitFromInvoices } from "@/lib/finance";
+import {
+  computeFinancialKPISummary,
+  computeCashFlowFromInvoices,
+  computeByCurrency,
+  type CurrencyBreakdown,
+} from "@/lib/finance";
 import { formatCurrency } from "@/lib/utils";
 import { useMemo, useState } from "react";
-import { CurrencyCard } from "@/components/ui/currency-card";
 import { useUserProfile } from "@/hooks/use-user-profile";
+import { useCurrencyStore } from "@/lib/stores/currency-store";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// ─── KPI Card ────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  trend,
+  trendPositive,
+  icon,
+  colorClass,
+  bgClass,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  trend?: string;
+  trendPositive?: boolean;
+  icon: React.ReactNode;
+  colorClass: string;
+  bgClass: string;
+}) {
+  return (
+    <Card className="relative overflow-hidden">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
+        <div className={`rounded-lg p-2 ${bgClass}`}>{icon}</div>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-2xl font-bold ${colorClass}`}>{value}</div>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
+        )}
+        {trend !== undefined && (
+          <div className="flex items-center gap-1 mt-1">
+            {trendPositive ? (
+              <ArrowUpRight className="h-3 w-3 text-green-600" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3 text-red-600" />
+            )}
+            <span
+              className={`text-xs font-medium ${
+                trendPositive ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {trend}
+            </span>
+            <span className="text-xs text-gray-400">geçen aya göre</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Section Title ─────────────────────────────────────────────────────────
+
+function SectionTitle({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 pb-1">
+      <div className="flex items-center gap-2">
+        {icon}
+        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+      </div>
+      {description && (
+        <span className="text-sm text-gray-400">— {description}</span>
+      )}
+    </div>
+  );
+}
+
+// ─── Currency Symbol Helper ───────────────────────────────────────────────
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  TRY: "₺",
+  RUB: "₽",
+};
+const CURRENCY_FLAGS: Record<string, string> = {
+  USD: "🇺🇸",
+  EUR: "🇪🇺",
+  TRY: "🇹🇷",
+  RUB: "🇷🇺",
+};
+
+function formatNative(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("tr-TR", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `${CURRENCY_SYMBOLS[currency] ?? currency}${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}`;
+  }
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { permissions } = useUserProfile();
   const { data: positions, isLoading: positionsLoading } = usePositions();
-  const { data: invoices, isLoading: invoicesLoading } = useInvoices();
-  const { data: exchangeRates } = useExchangeRates();
+  const { data: invoicesRaw, isLoading: invoicesLoading } = useInvoices();
+  const { data: exchangeRates, isLoading: ratesLoading } = useExchangeRates();
+  const { currency: displayCurrency, setCurrency: setDisplayCurrency } = useCurrencyStore();
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
 
-  // Calculate stats from real data
-  const stats = useMemo(() => {
-    if (!positions || !invoices) {
-      return {
-        activePositions: {
-          value: 0,
-          trend: "0%",
-          trendColor: "text-gray-600"
-        },
-        thisMonthProfit: {
-          value: 0,
-          trend: "0%",
-          trendColor: "text-gray-600"
-        },
-        inTransit: {
-          value: 0,
-          trend: "Yükleniyor",
-          trendColor: "text-gray-600"
-        },
-        pendingActions: {
-          value: 0,
-          trend: "Yükleniyor",
-          trendColor: "text-gray-600"
-        },
-      };
-    }
+  // Normalize invoices to InvoiceRecord shape
+  const invoices = useMemo(
+    () =>
+      (invoicesRaw ?? []).map((inv: any) => ({
+        id: inv.id,
+        position_id: inv.position_id,
+        invoice_type: inv.invoice_type as "SALES" | "PURCHASE",
+        amount: Number(inv.amount),
+        currency: inv.currency,
+        invoice_date: inv.invoice_date,
+        due_date: inv.due_date ?? null,
+        is_paid: Boolean(inv.is_paid),
+      })),
+    [invoicesRaw]
+  );
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+  // ── Finansal KPI Özeti ────────────────────────────────────────────────────
+  const kpi = useMemo(
+    () => computeFinancialKPISummary(invoices, displayCurrency, exchangeRates ?? undefined),
+    [invoices, displayCurrency, exchangeRates]
+  );
 
-    // Helper to filter by month
-    const filterByMonth = (dateStr: string, month: number, year: number) => {
-      const d = new Date(dateStr);
-      return d.getMonth() === month && d.getFullYear() === year;
-    };
+  // ── Para Birimi Bazlı Breakdown (dönüşüm yok) ────────────────────────────
+  const currencyBreakdown = useMemo(() => computeByCurrency(invoices), [invoices]);
 
-    // 1. Active Positions
-    const activePositions = positions.filter(
+  // ── Nakit Akışı (son 6 ay) ────────────────────────────────────────────────
+  const cashFlow = useMemo(
+    () => computeCashFlowFromInvoices(invoices, exchangeRates ?? undefined, displayCurrency, 6, false),
+    [invoices, displayCurrency, exchangeRates]
+  );
+
+  // ── Operasyonel Metrikler ─────────────────────────────────────────────────
+  const opMetrics = useMemo(() => {
+    if (!positions) return null;
+    const total = positions.length;
+    const completed = positions.filter((p: any) => p.status === "COMPLETED").length;
+    const active = positions.filter(
       (p: any) => p.status === "IN_TRANSIT" || p.status === "READY_TO_DEPART"
     ).length;
-
-    // Previous month active (approximate by created_at for trend)
-    const currentMonthPositions = positions.filter((p: any) => filterByMonth(p.created_at, currentMonth, currentYear)).length;
-    const lastMonthPositions = positions.filter((p: any) => filterByMonth(p.created_at, lastMonth, lastMonthYear)).length;
-    const positionTrend = lastMonthPositions > 0 
-      ? Math.round(((currentMonthPositions - lastMonthPositions) / lastMonthPositions) * 100) 
-      : 0;
-
-    // 2. In Transit
     const inTransit = positions.filter((p: any) => p.status === "IN_TRANSIT").length;
-    // Transit trend (using updated_at as proxy for activity)
-    const inTransitTrend = 0; // Hard to calculate historical state without history table
-
-    // 3. Profit (merkezi finance modülü – TRY, invoice_date bazlı)
-    const thisMonthProfit = computeProfitFromInvoices(
-      invoices,
-      "TRY",
-      exchangeRates ?? undefined,
-      (inv) => filterByMonth(inv.invoice_date, currentMonth, currentYear)
-    );
-    const lastMonthProfit = computeProfitFromInvoices(
-      invoices,
-      "TRY",
-      exchangeRates ?? undefined,
-      (inv) => filterByMonth(inv.invoice_date, lastMonth, lastMonthYear)
-    );
-    const profitTrend = lastMonthProfit !== 0 
-      ? Math.round(((thisMonthProfit - lastMonthProfit) / Math.abs(lastMonthProfit)) * 100)
-      : 0;
-
-    // 4. Pending Actions
-    const pendingActions = positions.filter(
+    const pending = positions.filter(
       (p: any) => p.status === "DELIVERED" || p.status === "READY_TO_DEPART"
     ).length;
-    const pendingTrend = 0; // Dynamic real-time count
+    const cancelled = positions.filter((p: any) => p.status === "CANCELLED").length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    return {
-      activePositions: {
-        value: activePositions,
-        trend: positionTrend > 0 ? `+${positionTrend}%` : `${positionTrend}%`,
-        trendColor: positionTrend >= 0 ? "text-green-600" : "text-red-600"
-      },
-      thisMonthProfit: {
-        value: thisMonthProfit,
-        trend: profitTrend > 0 ? `+${profitTrend}%` : `${profitTrend}%`,
-        trendColor: profitTrend >= 0 ? "text-green-600" : "text-red-600"
-      },
-      inTransit: {
-        value: inTransit,
-        trend: "Aktif",
-        trendColor: "text-red-600"
-      },
-      pendingActions: {
-        value: pendingActions,
-        trend: "İşlem Bekliyor",
-        trendColor: "text-orange-600"
-      },
-    };
-  }, [positions, invoices, exchangeRates]);
+    // Pozisyon bazlı tahmini kar (estimated_profit alanından)
+    const estimatedProfitSum = positions
+      .filter((p: any) => p.estimated_profit != null && p.status !== "CANCELLED")
+      .reduce((s: number, p: any) => s + Number(p.estimated_profit ?? 0), 0);
 
-  // Get action required items from real data
+    // Bu ay oluşturulan pozisyonlar
+    const now = new Date();
+    const thisMonthPositions = positions.filter((p: any) => {
+      const d = new Date(p.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+
+    return { total, completed, active, inTransit, pending, cancelled, completionRate, estimatedProfitSum, thisMonthPositions };
+  }, [positions]);
+
+  // ── Action Required (paginated) ───────────────────────────────────────────
   const { paginatedItems, totalItems, totalPages } = useMemo(() => {
     if (!positions) return { paginatedItems: [], totalItems: 0, totalPages: 0 };
-    
-    const allItems = positions
-      .filter((p: any) => 
-        p.status === "DELIVERED" || p.status === "READY_TO_DEPART"
-      );
-
+    const allItems = positions.filter(
+      (p: any) => p.status === "DELIVERED" || p.status === "READY_TO_DEPART"
+    );
     const total = allItems.length;
     const pages = Math.ceil(total / ITEMS_PER_PAGE);
-    
-    // Reset to page 1 if current page is out of bounds
-    // Note: We can't call setState in useMemo, handled in useEffect or render
-    
     const items = allItems
       .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
       .map((p: any) => ({
@@ -166,41 +249,49 @@ export default function DashboardPage() {
         priority: p.status === "DELIVERED" ? "high" : "medium",
         route: `${p.loading_point} → ${p.unloading_point}`,
       }));
-
     return { paginatedItems: items, totalItems: total, totalPages: pages };
   }, [positions, currentPage]);
 
-  // Get recent activities from positions
+  // ── Son Aktiviteler ───────────────────────────────────────────────────────
   const recentActivities = useMemo(() => {
     if (!positions) return [];
-
     return positions
-      .sort((a: any, b: any) => 
-        new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      )
-      .slice(0, 3)
+      .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      .slice(0, 5)
       .map((p: any) => ({
-        action: p.status === "COMPLETED" ? "Pozisyon tamamlandı" :
-                p.status === "IN_TRANSIT" ? "Yola çıktı" :
-                p.status === "DELIVERED" ? "Teslimat yapıldı" : "Pozisyon oluşturuldu",
+        action:
+          p.status === "COMPLETED"
+            ? "Pozisyon tamamlandı"
+            : p.status === "IN_TRANSIT"
+            ? "Yola çıktı"
+            : p.status === "DELIVERED"
+            ? "Teslimat yapıldı"
+            : p.status === "CANCELLED"
+            ? "İptal edildi"
+            : "Pozisyon oluşturuldu",
         position: `#${p.position_no}`,
+        customer: (p.customers as any)?.company_name || "",
+        route: `${p.loading_point} → ${p.unloading_point}`,
         time: getTimeAgo(p.updated_at),
-        icon: p.status === "COMPLETED" ? CheckCircle :
-              p.status === "IN_TRANSIT" ? Truck : Package,
+        status: p.status,
+        icon:
+          p.status === "COMPLETED"
+            ? CheckCircle
+            : p.status === "IN_TRANSIT"
+            ? Truck
+            : p.status === "CANCELLED"
+            ? AlertCircle
+            : Package,
+        iconColor:
+          p.status === "COMPLETED"
+            ? "text-green-600"
+            : p.status === "IN_TRANSIT"
+            ? "text-blue-600"
+            : p.status === "CANCELLED"
+            ? "text-red-600"
+            : "text-gray-600",
       }));
   }, [positions]);
-
-  // Aylık karlılık (merkezi finance – TRY)
-  const monthlyProfitability = useMemo(() => {
-    if (!invoices) return [];
-    const rows = computeMonthlyProfitFromInvoices(invoices, exchangeRates ?? undefined, "TRY", 6);
-    const maxProfit = Math.max(...rows.map((m) => m.value), 1);
-    return rows.map((m) => ({
-      month: m.month,
-      value: m.value,
-      percent: maxProfit > 0 ? (m.value / maxProfit) * 100 : 0,
-    }));
-  }, [invoices, exchangeRates]);
 
   if (positionsLoading || invoicesLoading) {
     return (
@@ -213,241 +304,511 @@ export default function DashboardPage() {
     );
   }
 
+  const profitTrendPositive = kpi.profitTrend >= 0;
+  const maxCashFlow = Math.max(...cashFlow.map((m) => m.income + m.expense), 1);
+
   return (
-    <div className="space-y-6">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-          Dashboard
-        </h1>
-        <p className="text-gray-500">
-          Lojistik operasyonlarınıza genel bakış
-        </p>
+    <div className="space-y-8">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 text-sm">
+            {new Date().toLocaleDateString("tr-TR", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+        </div>
+
+        {/* Currency Selector */}
+        {permissions?.canViewFinance && (
+          <div className="flex items-center gap-2">
+            <RefreshCw className={`h-4 w-4 text-gray-400 ${ratesLoading ? "animate-spin" : ""}`} />
+            <span className="text-sm text-gray-500">Gösterim Kuru:</span>
+            <Select value={displayCurrency} onValueChange={(v: any) => setDisplayCurrency(v)}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="TRY">TRY (₺)</SelectItem>
+                <SelectItem value="USD">USD ($)</SelectItem>
+                <SelectItem value="EUR">EUR (€)</SelectItem>
+                <SelectItem value="RUB">RUB (₽)</SelectItem>
+              </SelectContent>
+            </Select>
+            {exchangeRates && !exchangeRates.error && (
+              <span className="text-xs text-green-600 font-medium">TCMB Canlı</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Stats Grid */}
-      <div className={`grid gap-4 md:grid-cols-2 ${permissions?.canViewFinance ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {/* Aktif Pozisyonlar */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Aktif Pozisyonlar
-            </CardTitle>
-            <div className="rounded-lg p-2 bg-red-50">
-              <Package className="h-4 w-4 text-red-600" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activePositions.value}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className={stats.activePositions.trendColor}>{stats.activePositions.trend}</span> geçen aya göre
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Bu Ay Kar - sadece finans yetkisi olanlar görür */}
-        {permissions?.canViewFinance && (
-          <CurrencyCard
-            title="Bu Ay Kar"
-            description="Bu Ay Kar"
-            amount={stats.thisMonthProfit.value}
-            originalCurrency="TRY"
-            icon={<DollarSign className="h-4 w-4 text-green-600" />}
-            className="border-green-200 bg-green-50"
-            titleClassName="text-green-600"
+      {/* ── Finansal KPI Satırı 1: Ciro & Kar ── */}
+      {permissions?.canViewFinance && (
+        <section className="space-y-3">
+          <SectionTitle
+            icon={<BarChart3 className="h-5 w-5 text-blue-600" />}
+            title="Finansal Performans"
+            description="Tüm zamanlar & dönemsel analiz"
           />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              title="Toplam Ciro"
+              value={formatCurrency(kpi.totalRevenue, displayCurrency)}
+              subtitle={`Tüm zamanlar • ${invoices.filter((i) => i.invoice_type === "SALES").length} satış faturası`}
+              icon={<TrendingUp className="h-4 w-4 text-blue-600" />}
+              colorClass="text-blue-700"
+              bgClass="bg-blue-50"
+            />
+            <KpiCard
+              title="Brüt Kar"
+              value={formatCurrency(kpi.grossProfit, displayCurrency)}
+              subtitle={`Kar Marjı: %${kpi.grossMargin.toFixed(1)}`}
+              icon={<DollarSign className="h-4 w-4 text-green-600" />}
+              colorClass={kpi.grossProfit >= 0 ? "text-green-700" : "text-red-700"}
+              bgClass="bg-green-50"
+            />
+            <KpiCard
+              title="Net Kar (Ödenenler)"
+              value={formatCurrency(kpi.netProfitPaid, displayCurrency)}
+              subtitle="Tahsil edilen faturalardan"
+              icon={<CheckCircle className="h-4 w-4 text-emerald-600" />}
+              colorClass={kpi.netProfitPaid >= 0 ? "text-emerald-700" : "text-red-700"}
+              bgClass="bg-emerald-50"
+            />
+            <KpiCard
+              title="YTD Kar"
+              value={formatCurrency(kpi.ytdProfit, displayCurrency)}
+              subtitle={`${new Date().getFullYear()} yılı toplam`}
+              icon={<Target className="h-4 w-4 text-purple-600" />}
+              colorClass={kpi.ytdProfit >= 0 ? "text-purple-700" : "text-red-700"}
+              bgClass="bg-purple-50"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── Finansal KPI Satırı 2: Alacak & Borç & Aylık ── */}
+      {permissions?.canViewFinance && (
+        <section className="space-y-3">
+          <SectionTitle
+            icon={<Banknote className="h-5 w-5 text-orange-600" />}
+            title="Alacak & Borç Durumu"
+            description="Güncel nakit pozisyonu"
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              title="Toplam Alacak"
+              value={formatCurrency(kpi.receivables, displayCurrency)}
+              subtitle="Tahsil edilmemiş satış faturası"
+              icon={<TrendingUp className="h-4 w-4 text-green-600" />}
+              colorClass="text-green-700"
+              bgClass="bg-green-50"
+            />
+            <KpiCard
+              title="Toplam Borç"
+              value={formatCurrency(kpi.payables, displayCurrency)}
+              subtitle="Ödenmemiş alış faturası"
+              icon={<TrendingDown className="h-4 w-4 text-red-600" />}
+              colorClass="text-red-700"
+              bgClass="bg-red-50"
+            />
+            <KpiCard
+              title="Vadesi Geçmiş"
+              value={formatCurrency(kpi.overdueReceivables, displayCurrency)}
+              subtitle="Gecikmiş tahsilat"
+              icon={<Clock className="h-4 w-4 text-orange-600" />}
+              colorClass="text-orange-700"
+              bgClass="bg-orange-50"
+            />
+            <KpiCard
+              title="Bu Ay Kar"
+              value={formatCurrency(kpi.thisMonthProfit, displayCurrency)}
+              subtitle={`Gelir: ${formatCurrency(kpi.thisMonthRevenue, displayCurrency)}`}
+              trend={
+                kpi.lastMonthProfit !== 0 || kpi.thisMonthProfit !== 0
+                  ? `${Math.abs(kpi.profitTrend)}%`
+                  : undefined
+              }
+              trendPositive={profitTrendPositive}
+              icon={<Activity className="h-4 w-4 text-indigo-600" />}
+              colorClass={kpi.thisMonthProfit >= 0 ? "text-indigo-700" : "text-red-700"}
+              bgClass="bg-indigo-50"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* ── Operasyonel KPI Satırı ── */}
+      <section className="space-y-3">
+        <SectionTitle
+          icon={<Package className="h-5 w-5 text-gray-600" />}
+          title="Operasyonel Metrikler"
+          description="Pozisyon & sefer durumu"
+        />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          <KpiCard
+            title="Toplam Pozisyon"
+            value={String(opMetrics?.total ?? 0)}
+            subtitle={`Bu ay: ${opMetrics?.thisMonthPositions ?? 0} yeni`}
+            icon={<Package className="h-4 w-4 text-gray-600" />}
+            colorClass="text-gray-900"
+            bgClass="bg-gray-50"
+          />
+          <KpiCard
+            title="Aktif Pozisyon"
+            value={String(opMetrics?.active ?? 0)}
+            subtitle="Hazır + Yolda"
+            icon={<Activity className="h-4 w-4 text-blue-600" />}
+            colorClass="text-blue-700"
+            bgClass="bg-blue-50"
+          />
+          <KpiCard
+            title="Tamamlanma Oranı"
+            value={`%${opMetrics?.completionRate ?? 0}`}
+            subtitle={`${opMetrics?.completed ?? 0} / ${opMetrics?.total ?? 0} pozisyon`}
+            icon={<CheckCircle className="h-4 w-4 text-green-600" />}
+            colorClass="text-green-700"
+            bgClass="bg-green-50"
+          />
+          <KpiCard
+            title="Yoldaki Araçlar"
+            value={String(opMetrics?.inTransit ?? 0)}
+            subtitle="IN_TRANSIT statüsünde"
+            icon={<Truck className="h-4 w-4 text-orange-600" />}
+            colorClass="text-orange-700"
+            bgClass="bg-orange-50"
+          />
+          <KpiCard
+            title="Bekleyen İşlemler"
+            value={String(opMetrics?.pending ?? 0)}
+            subtitle="Aksiyon gerektiren"
+            icon={<AlertCircle className="h-4 w-4 text-red-600" />}
+            colorClass="text-red-700"
+            bgClass="bg-red-50"
+          />
+        </div>
+      </section>
+
+      {/* ── Para Birimi Bazlı Breakdown ── */}
+      {permissions?.canViewFinance && currencyBreakdown.length > 0 && (
+        <section className="space-y-3">
+          <SectionTitle
+            icon={<Globe className="h-5 w-5 text-indigo-600" />}
+            title="Döviz Bazlı Finansal Tablo"
+            description="Orijinal para birimlerinde (dönüşüm yapılmaz)"
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {currencyBreakdown.map((cb: CurrencyBreakdown) => (
+              <Card key={cb.currency} className="overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-br from-slate-50 to-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{CURRENCY_FLAGS[cb.currency] ?? "🌍"}</span>
+                      <CardTitle className="text-base font-bold">{cb.currency}</CardTitle>
+                    </div>
+                    <Badge
+                      variant={cb.profit >= 0 ? "success" : "danger"}
+                      className="text-xs"
+                    >
+                      %{Math.abs(cb.margin).toFixed(1)} {cb.profit >= 0 ? "kar" : "zarar"}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500">Gelir</span>
+                    <span className="text-sm font-semibold text-green-700">
+                      {formatNative(cb.revenue, cb.currency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500">Gider</span>
+                    <span className="text-sm font-semibold text-red-700">
+                      {formatNative(cb.cost, cb.currency)}
+                    </span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-700">Brüt Kar</span>
+                    <span
+                      className={`text-sm font-bold ${
+                        cb.profit >= 0 ? "text-green-700" : "text-red-700"
+                      }`}
+                    >
+                      {cb.profit >= 0 ? "+" : ""}
+                      {formatNative(cb.profit, cb.currency)}
+                    </span>
+                  </div>
+                  {/* Margin bar */}
+                  <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${cb.profit >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                      style={{ width: `${Math.min(Math.abs(cb.margin), 100)}%` }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* Net Pozisyon Özet Kartı */}
+            {permissions?.canViewFinance && (
+              <Card className="overflow-hidden border-2 border-blue-200">
+                <CardHeader className="pb-3 bg-gradient-to-br from-blue-50 to-indigo-50">
+                  <div className="flex items-center gap-2">
+                    <PieChart className="h-5 w-5 text-blue-600" />
+                    <CardTitle className="text-base font-bold text-blue-800">Net Pozisyon</CardTitle>
+                  </div>
+                  <CardDescription className="text-xs">Alacak - Borç dengesi ({displayCurrency})</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500">Alacak</span>
+                    <span className="text-sm font-semibold text-green-700">
+                      {formatCurrency(kpi.receivables, displayCurrency)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-gray-500">Borç</span>
+                    <span className="text-sm font-semibold text-red-700">
+                      {formatCurrency(kpi.payables, displayCurrency)}
+                    </span>
+                  </div>
+                  <div className="border-t pt-2 flex justify-between items-center">
+                    <span className="text-xs font-medium text-gray-700">Net</span>
+                    <span
+                      className={`text-sm font-bold ${
+                        kpi.netPosition >= 0 ? "text-green-700" : "text-red-700"
+                      }`}
+                    >
+                      {formatCurrency(kpi.netPosition, displayCurrency)}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${kpi.netPosition >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                      style={{
+                        width: `${
+                          kpi.receivables + kpi.payables > 0
+                            ? Math.min((kpi.receivables / (kpi.receivables + kpi.payables)) * 100, 100)
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Nakit Akışı + Son Aktiviteler ── */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Nakit Akışı */}
+        {permissions?.canViewFinance && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-blue-600" />
+                    Aylık Nakit Akışı
+                  </CardTitle>
+                  <CardDescription>
+                    Son 6 ay gelir / gider / kar ({displayCurrency})
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {cashFlow.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-6">Henüz fatura verisi yok.</p>
+                ) : (
+                  cashFlow.map((data) => {
+                    const total = Math.max(data.income + data.expense, 1);
+                    return (
+                      <div key={`${data.month}-${data.year}`} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-gray-700 w-14 shrink-0">
+                            {data.month.slice(0, 3)}
+                          </span>
+                          <div className="flex gap-3 text-right flex-wrap justify-end">
+                            <span className="text-green-600">
+                              +{formatCurrency(data.income, displayCurrency)}
+                            </span>
+                            <span className="text-red-600">
+                              -{formatCurrency(data.expense, displayCurrency)}
+                            </span>
+                            <span
+                              className={`font-bold ${
+                                data.profit >= 0 ? "text-blue-700" : "text-red-700"
+                              }`}
+                            >
+                              ={formatCurrency(data.profit, displayCurrency)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
+                          <div
+                            className="bg-green-400 transition-all"
+                            style={{ width: `${(data.income / (maxCashFlow)) * 100}%` }}
+                          />
+                          <div
+                            className="bg-red-400 transition-all"
+                            style={{ width: `${(data.expense / (maxCashFlow)) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex gap-2 text-[10px] text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+                            Gelir
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                            Gider
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* Yoldaki Araçlar */}
+        {/* Son Aktiviteler */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Yoldaki Araçlar
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-gray-600" />
+              Son Aktiviteler
             </CardTitle>
-            <div className="rounded-lg p-2 bg-orange-50">
-              <Truck className="h-4 w-4 text-orange-600" />
-            </div>
+            <CardDescription>En son güncellenen pozisyonlar</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.inTransit.value}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className={stats.inTransit.trendColor}>{stats.inTransit.trend}</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Bekleyen İşlemler */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Bekleyen İşlemler
-            </CardTitle>
-            <div className="rounded-lg p-2 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
+            <div className="space-y-3">
+              {recentActivities.length === 0 ? (
+                <p className="text-center text-sm text-gray-400 py-6">Henüz aktivite yok.</p>
+              ) : (
+                recentActivities.map((activity, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="rounded-full bg-gray-100 p-2 mt-0.5 shrink-0">
+                      <activity.icon className={`h-3.5 w-3.5 ${activity.iconColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{activity.action}</p>
+                        <span className="text-xs font-mono text-gray-500 shrink-0">{activity.position}</span>
+                      </div>
+                      {activity.customer && (
+                        <p className="text-xs text-gray-500 truncate">{activity.customer}</p>
+                      )}
+                      <p className="text-xs text-gray-400 truncate">{activity.route}</p>
+                    </div>
+                    <span className="text-xs text-gray-400 shrink-0">{activity.time}</span>
+                  </div>
+                ))
+              )}
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingActions.value}</div>
-            <p className="text-xs text-muted-foreground">
-              <span className={stats.pendingActions.trendColor}>{stats.pendingActions.trend}</span>
-            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Action Required */}
-        <Card className="col-span-1 lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-red-500 animate-blink" />
-                  Dikkat Gereken İşlemler
-                </CardTitle>
-                <CardDescription>
-                  {totalItems} adet işlem bekleniyor
-                </CardDescription>
-              </div>
+      {/* ── Dikkat Gereken İşlemler ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-500 animate-pulse" />
+                Dikkat Gereken İşlemler
+              </CardTitle>
+              <CardDescription>{totalItems} adet işlem aksiyon bekliyor</CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {paginatedItems.length === 0 ? (
-                <p className="text-center text-sm text-gray-500 py-4">
-                  Bekleyen işlem bulunmuyor.
-                </p>
-              ) : (
-                paginatedItems.map((item) => (
+            {totalItems > 0 && (
+              <Link href="/positions">
+                <Button variant="outline" size="sm">
+                  Tümünü Gör
+                </Button>
+              </Link>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {paginatedItems.length === 0 ? (
+              <div className="text-center py-8">
+                <CheckCircle className="mx-auto h-8 w-8 text-green-400 mb-2" />
+                <p className="text-sm text-gray-500">Bekleyen işlem bulunmuyor. Harika!</p>
+              </div>
+            ) : (
+              paginatedItems.map((item) => (
                 <div
                   key={item.id}
                   className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4 transition-all hover:shadow-md"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">
-                        {item.positionNo}
-                      </span>
-                      <Badge
-                        variant={
-                          item.priority === "high" ? "danger" : "warning"
-                        }
-                      >
+                      <span className="font-semibold text-gray-900">{item.positionNo}</span>
+                      <Badge variant={item.priority === "high" ? "danger" : "warning"}>
                         {item.priority === "high" ? "Acil" : "Orta"}
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-600">{item.customer}</p>
-                    <p className="text-xs text-gray-500">{item.route}</p>
+                    <p className="text-xs text-gray-400">{item.route}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-red-700">
-                      {item.issue}
-                    </p>
-                    <Link 
+                    <p className="text-sm font-medium text-red-700">{item.issue}</p>
+                    <Link
                       href={`/positions/${item.id}`}
-                      className="mt-2 inline-block text-xs text-red-600 hover:text-red-800"
+                      className="mt-1 inline-block text-xs text-red-600 hover:text-red-800 font-medium"
                     >
                       İncele →
                     </Link>
                   </div>
                 </div>
-                ))
-              )}
+              ))
+            )}
 
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-500">
-                    Sayfa {currentPage} / {totalPages}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="h-8 w-8"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="h-8 w-8"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                <span className="text-sm text-gray-500">
+                  Sayfa {currentPage} / {totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 w-8"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 w-8"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Son Aktiviteler</CardTitle>
-            <CardDescription>
-              Son 24 saatte gerçekleşen işlemler
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivities.map((activity, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="rounded-full bg-gray-100 p-2">
-                    <activity.icon className="h-4 w-4 text-gray-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{activity.action}</p>
-                    <p className="text-xs text-gray-500">{activity.position}</p>
-                  </div>
-                  <span className="text-xs text-gray-400">{activity.time}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Aylık Karlılık - sadece finans yetkisi olanlar görür */}
-        {permissions?.canViewFinance && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Aylık Karlılık</CardTitle>
-              <CardDescription>Son 6 aylık kar trendi</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {monthlyProfitability.map((data) => (
-                  <div key={data.month} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{data.month}</span>
-                      <span className="text-gray-600">
-                        {formatCurrency(data.value, "TRY")}
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-600"
-                        style={{ width: `${data.percent}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// Helper function to get time ago
 function getTimeAgo(date: string): string {
   const now = new Date();
   const past = new Date(date);
@@ -456,8 +817,8 @@ function getTimeAgo(date: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 60) return `${diffMins} dakika önce`;
-  if (diffHours < 24) return `${diffHours} saat önce`;
-  return `${diffDays} gün önce`;
+  if (diffMins < 1) return "Az önce";
+  if (diffMins < 60) return `${diffMins}dk önce`;
+  if (diffHours < 24) return `${diffHours}sa önce`;
+  return `${diffDays}g önce`;
 }
-
