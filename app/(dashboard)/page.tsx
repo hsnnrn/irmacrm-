@@ -31,6 +31,8 @@ import {
   Banknote,
   PieChart,
   RefreshCw,
+  Calculator,
+  FileText,
 } from "lucide-react";
 import { usePositions } from "@/hooks/use-positions";
 import { useInvoices } from "@/hooks/use-invoices";
@@ -40,6 +42,7 @@ import {
   computeCashFlowFromInvoices,
   computeByCurrency,
   type CurrencyBreakdown,
+  type InvoiceRecord,
 } from "@/lib/finance";
 import { formatCurrency } from "@/lib/utils";
 import { useMemo, useState } from "react";
@@ -64,6 +67,7 @@ function KpiCard({
   icon,
   colorClass,
   bgClass,
+  tag,
 }: {
   title: string;
   value: string;
@@ -73,11 +77,19 @@ function KpiCard({
   icon: React.ReactNode;
   colorClass: string;
   bgClass: string;
+  tag?: string;
 }) {
   return (
     <Card className="relative overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
+          {tag && (
+            <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">
+              {tag}
+            </span>
+          )}
+        </div>
         <div className={`rounded-lg p-2 ${bgClass}`}>{icon}</div>
       </CardHeader>
       <CardContent>
@@ -107,38 +119,35 @@ function KpiCard({
   );
 }
 
-// ─── Section Title ─────────────────────────────────────────────────────────
-
 function SectionTitle({
   icon,
   title,
   description,
+  badge,
 }: {
   icon: React.ReactNode;
   title: string;
   description?: string;
+  badge?: string;
 }) {
   return (
     <div className="flex items-center gap-3 pb-1">
       <div className="flex items-center gap-2">
         {icon}
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        {badge && (
+          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+            {badge}
+          </span>
+        )}
       </div>
       {description && (
-        <span className="text-sm text-gray-400">— {description}</span>
+        <span className="text-sm text-gray-400 hidden sm:block">— {description}</span>
       )}
     </div>
   );
 }
 
-// ─── Currency Symbol Helper ───────────────────────────────────────────────
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  TRY: "₺",
-  RUB: "₽",
-};
 const CURRENCY_FLAGS: Record<string, string> = {
   USD: "🇺🇸",
   EUR: "🇪🇺",
@@ -155,7 +164,8 @@ function formatNative(amount: number, currency: string): string {
       maximumFractionDigits: 2,
     }).format(amount);
   } catch {
-    return `${CURRENCY_SYMBOLS[currency] ?? currency}${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}`;
+    const sym: Record<string, string> = { USD: "$", EUR: "€", TRY: "₺", RUB: "₽" };
+    return `${sym[currency] ?? currency}${amount.toLocaleString("tr-TR", { minimumFractionDigits: 2 })}`;
   }
 }
 
@@ -163,78 +173,103 @@ function formatNative(amount: number, currency: string): string {
 
 export default function DashboardPage() {
   const { permissions } = useUserProfile();
-  const { data: positions, isLoading: positionsLoading } = usePositions();
-  const { data: invoicesRaw, isLoading: invoicesLoading } = useInvoices();
+  const { data: positions, isLoading: positionsLoading, error: positionsError } = usePositions();
+  const { data: invoicesRaw, isLoading: invoicesLoading, error: invoicesError } = useInvoices();
   const { data: exchangeRates, isLoading: ratesLoading } = useExchangeRates();
   const { currency: displayCurrency, setCurrency: setDisplayCurrency } = useCurrencyStore();
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
 
-  // Normalize invoices to InvoiceRecord shape
+  // Normalize to InvoiceRecord[]
   const invoices = useMemo(
-    () =>
+    (): InvoiceRecord[] =>
       (invoicesRaw ?? []).map((inv: any) => ({
-        id: inv.id,
-        position_id: inv.position_id,
+        id: String(inv.id),
+        position_id: String(inv.position_id),
         invoice_type: inv.invoice_type as "SALES" | "PURCHASE",
-        amount: Number(inv.amount),
-        currency: inv.currency,
-        invoice_date: inv.invoice_date,
-        due_date: inv.due_date ?? null,
+        amount: Number(inv.amount ?? 0),
+        currency: String(inv.currency ?? "TRY"),
+        invoice_date: String(inv.invoice_date ?? ""),
+        due_date: inv.due_date ? String(inv.due_date) : null,
         is_paid: Boolean(inv.is_paid),
       })),
     [invoicesRaw]
   );
 
-  // ── Finansal KPI Özeti ────────────────────────────────────────────────────
+  // ── Finansal KPI Özeti (fatura bazlı) ────────────────────────────────────
   const kpi = useMemo(
     () => computeFinancialKPISummary(invoices, displayCurrency, exchangeRates ?? undefined),
     [invoices, displayCurrency, exchangeRates]
   );
 
-  // ── Para Birimi Bazlı Breakdown (dönüşüm yok) ────────────────────────────
+  // ── Para Birimi Bazlı Breakdown ───────────────────────────────────────────
   const currencyBreakdown = useMemo(() => computeByCurrency(invoices), [invoices]);
 
-  // ── Nakit Akışı (son 6 ay) ────────────────────────────────────────────────
+  // ── Nakit Akışı ───────────────────────────────────────────────────────────
   const cashFlow = useMemo(
-    () => computeCashFlowFromInvoices(invoices, exchangeRates ?? undefined, displayCurrency, 6, false),
+    () =>
+      computeCashFlowFromInvoices(
+        invoices,
+        exchangeRates ?? undefined,
+        displayCurrency,
+        6,
+        false
+      ),
     [invoices, displayCurrency, exchangeRates]
   );
 
-  // ── Operasyonel Metrikler ─────────────────────────────────────────────────
+  // ── Pozisyon Bazlı Metrikler ──────────────────────────────────────────────
   const opMetrics = useMemo(() => {
-    if (!positions) return null;
-    const total = positions.length;
-    const completed = positions.filter((p: any) => p.status === "COMPLETED").length;
-    const active = positions.filter(
+    const pos = positions ?? [];
+    const total = pos.length;
+    const completed = pos.filter((p: any) => p.status === "COMPLETED").length;
+    const active = pos.filter(
       (p: any) => p.status === "IN_TRANSIT" || p.status === "READY_TO_DEPART"
     ).length;
-    const inTransit = positions.filter((p: any) => p.status === "IN_TRANSIT").length;
-    const pending = positions.filter(
+    const inTransit = pos.filter((p: any) => p.status === "IN_TRANSIT").length;
+    const pending = pos.filter(
       (p: any) => p.status === "DELIVERED" || p.status === "READY_TO_DEPART"
     ).length;
-    const cancelled = positions.filter((p: any) => p.status === "CANCELLED").length;
+    const cancelled = pos.filter((p: any) => p.status === "CANCELLED").length;
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
 
     // Pozisyon bazlı tahmini kar (estimated_profit alanından)
-    const estimatedProfitSum = positions
-      .filter((p: any) => p.estimated_profit != null && p.status !== "CANCELLED")
-      .reduce((s: number, p: any) => s + Number(p.estimated_profit ?? 0), 0);
+    // Bu değer invoice olmadan da gösterilir
+    const positionEstimatedProfit = pos.reduce(
+      (s: number, p: any) =>
+        s + (p.status !== "CANCELLED" ? Number(p.estimated_profit ?? 0) : 0),
+      0
+    );
 
-    // Bu ay oluşturulan pozisyonlar
+    // Satış fiyatı toplamı (TRY ve yabancı döviz ayrı)
+    const salesByPosition: { currency: string; amount: number }[] = pos
+      .filter((p: any) => p.status !== "CANCELLED" && p.sales_price)
+      .map((p: any) => ({ currency: p.sales_currency ?? "USD", amount: Number(p.sales_price ?? 0) }));
+
     const now = new Date();
-    const thisMonthPositions = positions.filter((p: any) => {
+    const thisMonthPositions = pos.filter((p: any) => {
       const d = new Date(p.created_at);
       return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
 
-    return { total, completed, active, inTransit, pending, cancelled, completionRate, estimatedProfitSum, thisMonthPositions };
+    return {
+      total,
+      completed,
+      active,
+      inTransit,
+      pending,
+      cancelled,
+      completionRate,
+      positionEstimatedProfit,
+      salesByPosition,
+      thisMonthPositions,
+    };
   }, [positions]);
 
-  // ── Action Required (paginated) ───────────────────────────────────────────
+  // ── Action Required ───────────────────────────────────────────────────────
   const { paginatedItems, totalItems, totalPages } = useMemo(() => {
-    if (!positions) return { paginatedItems: [], totalItems: 0, totalPages: 0 };
-    const allItems = positions.filter(
+    const pos = positions ?? [];
+    const allItems = pos.filter(
       (p: any) => p.status === "DELIVERED" || p.status === "READY_TO_DEPART"
     );
     const total = allItems.length;
@@ -245,7 +280,8 @@ export default function DashboardPage() {
         id: p.id,
         positionNo: `#${p.position_no}`,
         customer: (p.customers as any)?.company_name || "Müşteri",
-        issue: p.status === "DELIVERED" ? "Kapatma işlemi bekleniyor" : "Belgeler eksik",
+        issue:
+          p.status === "DELIVERED" ? "Kapatma işlemi bekleniyor" : "Belgeler eksik",
         priority: p.status === "DELIVERED" ? "high" : "medium",
         route: `${p.loading_point} → ${p.unloading_point}`,
       }));
@@ -254,9 +290,13 @@ export default function DashboardPage() {
 
   // ── Son Aktiviteler ───────────────────────────────────────────────────────
   const recentActivities = useMemo(() => {
-    if (!positions) return [];
-    return positions
-      .sort((a: any, b: any) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    const pos = positions ?? [];
+    return pos
+      .slice()
+      .sort(
+        (a: any, b: any) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      )
       .slice(0, 5)
       .map((p: any) => ({
         action:
@@ -293,6 +333,7 @@ export default function DashboardPage() {
       }));
   }, [positions]);
 
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (positionsLoading || invoicesLoading) {
     return (
       <div className="flex h-[calc(100vh-200px)] items-center justify-center">
@@ -304,6 +345,23 @@ export default function DashboardPage() {
     );
   }
 
+  // ── Error ─────────────────────────────────────────────────────────────────
+  if (positionsError || invoicesError) {
+    return (
+      <div className="flex h-[calc(100vh-200px)] items-center justify-center">
+        <div className="text-center space-y-2">
+          <AlertCircle className="mx-auto h-8 w-8 text-red-500" />
+          <p className="text-red-600 font-medium">Veri yükleme hatası</p>
+          <p className="text-sm text-gray-500">
+            {(positionsError as any)?.message || (invoicesError as any)?.message || "Supabase bağlantısını kontrol edin"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const hasInvoices = invoices.length > 0;
+  const hasPositions = opMetrics.total > 0;
   const profitTrendPositive = kpi.profitTrend >= 0;
   const maxCashFlow = Math.max(...cashFlow.map((m) => m.income + m.expense), 1);
 
@@ -323,10 +381,11 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Currency Selector */}
         {permissions?.canViewFinance && (
           <div className="flex items-center gap-2">
-            <RefreshCw className={`h-4 w-4 text-gray-400 ${ratesLoading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`h-4 w-4 text-gray-400 ${ratesLoading ? "animate-spin" : ""}`}
+            />
             <span className="text-sm text-gray-500">Gösterim Kuru:</span>
             <Select value={displayCurrency} onValueChange={(v: any) => setDisplayCurrency(v)}>
               <SelectTrigger className="w-[130px]">
@@ -346,52 +405,133 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Finansal KPI Satırı 1: Ciro & Kar ── */}
+      {/* ── Uyarı: Veri yok ── */}
+      {!hasPositions && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="flex items-center gap-3 py-4">
+            <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">
+                Henüz pozisyon verisi bulunmuyor.
+              </p>
+              <p className="text-xs text-yellow-700">
+                Operasyon verilerini görmek için{" "}
+                <Link href="/positions/create" className="underline font-medium">
+                  pozisyon oluşturun
+                </Link>{" "}
+                veya Supabase SQL Editor'de{" "}
+                <code className="bg-yellow-100 px-1 rounded">seed_data.sql</code> dosyasını çalıştırın.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Uyarı: Fatura yok ── */}
+      {hasPositions && !hasInvoices && permissions?.canViewFinance && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="flex items-center gap-3 py-4">
+            <FileText className="h-5 w-5 text-blue-600 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">
+                Fatura kaydı bulunamadı — finansal KPI'lar pozisyon tahminine göre hesaplanıyor.
+              </p>
+              <p className="text-xs text-blue-700">
+                Gerçek kar verisi için pozisyonlara satış ve alış faturası ekleyin. Supabase SQL
+                Editor'de <code className="bg-blue-100 px-1 rounded">INSERT_DASHBOARD_DATA.sql</code>{" "}
+                ile örnek fatura verisi oluşturabilirsiniz.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Finansal KPI Satırı 1 ── */}
       {permissions?.canViewFinance && (
         <section className="space-y-3">
           <SectionTitle
             icon={<BarChart3 className="h-5 w-5 text-blue-600" />}
             title="Finansal Performans"
             description="Tüm zamanlar & dönemsel analiz"
+            badge={hasInvoices ? "Fatura bazlı" : "Pozisyon tahmini"}
           />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <KpiCard
               title="Toplam Ciro"
-              value={formatCurrency(kpi.totalRevenue, displayCurrency)}
-              subtitle={`Tüm zamanlar • ${invoices.filter((i) => i.invoice_type === "SALES").length} satış faturası`}
+              value={
+                hasInvoices
+                  ? formatCurrency(kpi.totalRevenue, displayCurrency)
+                  : formatCurrency(
+                      (positions ?? [])
+                        .filter((p: any) => p.status !== "CANCELLED" && p.sales_price)
+                        .reduce((s: number, p: any) => {
+                          // fallback: sum of sales_price (kur dönüşümü yapılamaz, ham toplam)
+                          return s + Number(p.sales_price ?? 0);
+                        }, 0),
+                      (positions?.[0] as any)?.sales_currency ?? "USD"
+                    )
+              }
+              subtitle={
+                hasInvoices
+                  ? `${invoices.filter((i) => i.invoice_type === "SALES").length} satış faturası`
+                  : "Pozisyon satış fiyatı toplamı (ham)"
+              }
               icon={<TrendingUp className="h-4 w-4 text-blue-600" />}
               colorClass="text-blue-700"
               bgClass="bg-blue-50"
+              tag={!hasInvoices ? "Tahmini" : undefined}
             />
             <KpiCard
               title="Brüt Kar"
-              value={formatCurrency(kpi.grossProfit, displayCurrency)}
-              subtitle={`Kar Marjı: %${kpi.grossMargin.toFixed(1)}`}
+              value={
+                hasInvoices
+                  ? formatCurrency(kpi.grossProfit, displayCurrency)
+                  : formatCurrency(opMetrics.positionEstimatedProfit, (positions?.[0] as any)?.sales_currency ?? "USD")
+              }
+              subtitle={
+                hasInvoices
+                  ? `Kar Marjı: %${kpi.grossMargin.toFixed(1)}`
+                  : "Pozisyon estimated_profit toplamı"
+              }
               icon={<DollarSign className="h-4 w-4 text-green-600" />}
-              colorClass={kpi.grossProfit >= 0 ? "text-green-700" : "text-red-700"}
+              colorClass={
+                (hasInvoices ? kpi.grossProfit : opMetrics.positionEstimatedProfit) >= 0
+                  ? "text-green-700"
+                  : "text-red-700"
+              }
               bgClass="bg-green-50"
+              tag={!hasInvoices ? "Tahmini" : undefined}
             />
             <KpiCard
               title="Net Kar (Ödenenler)"
-              value={formatCurrency(kpi.netProfitPaid, displayCurrency)}
-              subtitle="Tahsil edilen faturalardan"
+              value={formatCurrency(hasInvoices ? kpi.netProfitPaid : 0, displayCurrency)}
+              subtitle={hasInvoices ? "Tahsil edilen faturalardan" : "Fatura eklendikten sonra hesaplanır"}
               icon={<CheckCircle className="h-4 w-4 text-emerald-600" />}
-              colorClass={kpi.netProfitPaid >= 0 ? "text-emerald-700" : "text-red-700"}
+              colorClass={hasInvoices && kpi.netProfitPaid < 0 ? "text-red-700" : "text-emerald-700"}
               bgClass="bg-emerald-50"
             />
             <KpiCard
               title="YTD Kar"
-              value={formatCurrency(kpi.ytdProfit, displayCurrency)}
-              subtitle={`${new Date().getFullYear()} yılı toplam`}
+              value={formatCurrency(hasInvoices ? kpi.ytdProfit : opMetrics.positionEstimatedProfit, displayCurrency)}
+              subtitle={
+                hasInvoices
+                  ? `${new Date().getFullYear()} yılı toplam`
+                  : "Yıl içi tahmini kar (pozisyon bazlı)"
+              }
               icon={<Target className="h-4 w-4 text-purple-600" />}
-              colorClass={kpi.ytdProfit >= 0 ? "text-purple-700" : "text-red-700"}
+              colorClass={
+                (hasInvoices ? kpi.ytdProfit : opMetrics.positionEstimatedProfit) >= 0
+                  ? "text-purple-700"
+                  : "text-red-700"
+              }
               bgClass="bg-purple-50"
+              tag={!hasInvoices ? "Tahmini" : undefined}
             />
           </div>
         </section>
       )}
 
-      {/* ── Finansal KPI Satırı 2: Alacak & Borç & Aylık ── */}
+      {/* ── Finansal KPI Satırı 2: Alacak & Borç ── */}
       {permissions?.canViewFinance && (
         <section className="space-y-3">
           <SectionTitle
@@ -426,41 +566,50 @@ export default function DashboardPage() {
             />
             <KpiCard
               title="Bu Ay Kar"
-              value={formatCurrency(kpi.thisMonthProfit, displayCurrency)}
-              subtitle={`Gelir: ${formatCurrency(kpi.thisMonthRevenue, displayCurrency)}`}
+              value={formatCurrency(
+                hasInvoices ? kpi.thisMonthProfit : 0,
+                displayCurrency
+              )}
+              subtitle={
+                hasInvoices
+                  ? `Gelir: ${formatCurrency(kpi.thisMonthRevenue, displayCurrency)}`
+                  : "Fatura kaydı yok"
+              }
               trend={
-                kpi.lastMonthProfit !== 0 || kpi.thisMonthProfit !== 0
+                hasInvoices && (kpi.lastMonthProfit !== 0 || kpi.thisMonthProfit !== 0)
                   ? `${Math.abs(kpi.profitTrend)}%`
                   : undefined
               }
               trendPositive={profitTrendPositive}
               icon={<Activity className="h-4 w-4 text-indigo-600" />}
-              colorClass={kpi.thisMonthProfit >= 0 ? "text-indigo-700" : "text-red-700"}
+              colorClass={
+                hasInvoices && kpi.thisMonthProfit < 0 ? "text-red-700" : "text-indigo-700"
+              }
               bgClass="bg-indigo-50"
             />
           </div>
         </section>
       )}
 
-      {/* ── Operasyonel KPI Satırı ── */}
+      {/* ── Operasyonel KPI ── */}
       <section className="space-y-3">
         <SectionTitle
           icon={<Package className="h-5 w-5 text-gray-600" />}
           title="Operasyonel Metrikler"
           description="Pozisyon & sefer durumu"
         />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <KpiCard
             title="Toplam Pozisyon"
-            value={String(opMetrics?.total ?? 0)}
-            subtitle={`Bu ay: ${opMetrics?.thisMonthPositions ?? 0} yeni`}
+            value={String(opMetrics.total)}
+            subtitle={`Bu ay: ${opMetrics.thisMonthPositions} yeni`}
             icon={<Package className="h-4 w-4 text-gray-600" />}
             colorClass="text-gray-900"
             bgClass="bg-gray-50"
           />
           <KpiCard
             title="Aktif Pozisyon"
-            value={String(opMetrics?.active ?? 0)}
+            value={String(opMetrics.active)}
             subtitle="Hazır + Yolda"
             icon={<Activity className="h-4 w-4 text-blue-600" />}
             colorClass="text-blue-700"
@@ -468,15 +617,15 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="Tamamlanma Oranı"
-            value={`%${opMetrics?.completionRate ?? 0}`}
-            subtitle={`${opMetrics?.completed ?? 0} / ${opMetrics?.total ?? 0} pozisyon`}
+            value={`%${opMetrics.completionRate}`}
+            subtitle={`${opMetrics.completed} / ${opMetrics.total} pozisyon`}
             icon={<CheckCircle className="h-4 w-4 text-green-600" />}
             colorClass="text-green-700"
             bgClass="bg-green-50"
           />
           <KpiCard
             title="Yoldaki Araçlar"
-            value={String(opMetrics?.inTransit ?? 0)}
+            value={String(opMetrics.inTransit)}
             subtitle="IN_TRANSIT statüsünde"
             icon={<Truck className="h-4 w-4 text-orange-600" />}
             colorClass="text-orange-700"
@@ -484,7 +633,7 @@ export default function DashboardPage() {
           />
           <KpiCard
             title="Bekleyen İşlemler"
-            value={String(opMetrics?.pending ?? 0)}
+            value={String(opMetrics.pending)}
             subtitle="Aksiyon gerektiren"
             icon={<AlertCircle className="h-4 w-4 text-red-600" />}
             colorClass="text-red-700"
@@ -493,8 +642,52 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* ── Para Birimi Bazlı Breakdown ── */}
-      {permissions?.canViewFinance && currencyBreakdown.length > 0 && (
+      {/* ── Pozisyon Tahmini Kar Tablosu (fatura yokken) ── */}
+      {permissions?.canViewFinance && !hasInvoices && hasPositions && (
+        <section className="space-y-3">
+          <SectionTitle
+            icon={<Calculator className="h-5 w-5 text-purple-600" />}
+            title="Pozisyon Bazlı Tahmini Kar"
+            description="estimated_profit alanından (fatura girilmeden hesaplanmış)"
+            badge="Tahmini"
+          />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Status bazlı kar dağılımı */}
+            {(
+              [
+                { status: "COMPLETED", label: "Tamamlanan", color: "text-green-700", bg: "bg-green-50" },
+                { status: "IN_TRANSIT", label: "Yolda", color: "text-blue-700", bg: "bg-blue-50" },
+                { status: "READY_TO_DEPART", label: "Hazır", color: "text-orange-700", bg: "bg-orange-50" },
+                { status: "DELIVERED", label: "Teslim Edildi", color: "text-purple-700", bg: "bg-purple-50" },
+              ] as const
+            ).map((s) => {
+              const filtered = (positions ?? []).filter((p: any) => p.status === s.status);
+              const sum = filtered.reduce((acc: number, p: any) => acc + Number(p.estimated_profit ?? 0), 0);
+              return (
+                <Card key={s.status}>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium text-gray-600">{s.label}</CardTitle>
+                    <div className={`rounded-lg p-2 ${s.bg}`}>
+                      <Target className={`h-4 w-4 ${s.color}`} />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={`text-xl font-bold ${s.color}`}>
+                      {sum !== 0
+                        ? sum.toLocaleString("tr-TR", { minimumFractionDigits: 0 })
+                        : "—"}
+                    </div>
+                    <p className="text-xs text-gray-500">{filtered.length} pozisyon • Karma döviz</p>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Para Birimi Bazlı Breakdown (sadece fatura varsa) ── */}
+      {permissions?.canViewFinance && hasInvoices && currencyBreakdown.length > 0 && (
         <section className="space-y-3">
           <SectionTitle
             icon={<Globe className="h-5 w-5 text-indigo-600" />}
@@ -510,10 +703,7 @@ export default function DashboardPage() {
                       <span className="text-xl">{CURRENCY_FLAGS[cb.currency] ?? "🌍"}</span>
                       <CardTitle className="text-base font-bold">{cb.currency}</CardTitle>
                     </div>
-                    <Badge
-                      variant={cb.profit >= 0 ? "success" : "danger"}
-                      className="text-xs"
-                    >
+                    <Badge variant={cb.profit >= 0 ? "success" : "danger"} className="text-xs">
                       %{Math.abs(cb.margin).toFixed(1)} {cb.profit >= 0 ? "kar" : "zarar"}
                     </Badge>
                   </div>
@@ -534,15 +724,12 @@ export default function DashboardPage() {
                   <div className="border-t pt-2 flex justify-between items-center">
                     <span className="text-xs font-medium text-gray-700">Brüt Kar</span>
                     <span
-                      className={`text-sm font-bold ${
-                        cb.profit >= 0 ? "text-green-700" : "text-red-700"
-                      }`}
+                      className={`text-sm font-bold ${cb.profit >= 0 ? "text-green-700" : "text-red-700"}`}
                     >
                       {cb.profit >= 0 ? "+" : ""}
                       {formatNative(cb.profit, cb.currency)}
                     </span>
                   </div>
-                  {/* Margin bar */}
                   <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
                     <div
                       className={`h-full rounded-full ${cb.profit >= 0 ? "bg-green-500" : "bg-red-500"}`}
@@ -553,54 +740,55 @@ export default function DashboardPage() {
               </Card>
             ))}
 
-            {/* Net Pozisyon Özet Kartı */}
-            {permissions?.canViewFinance && (
-              <Card className="overflow-hidden border-2 border-blue-200">
-                <CardHeader className="pb-3 bg-gradient-to-br from-blue-50 to-indigo-50">
-                  <div className="flex items-center gap-2">
-                    <PieChart className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-base font-bold text-blue-800">Net Pozisyon</CardTitle>
-                  </div>
-                  <CardDescription className="text-xs">Alacak - Borç dengesi ({displayCurrency})</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Alacak</span>
-                    <span className="text-sm font-semibold text-green-700">
-                      {formatCurrency(kpi.receivables, displayCurrency)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Borç</span>
-                    <span className="text-sm font-semibold text-red-700">
-                      {formatCurrency(kpi.payables, displayCurrency)}
-                    </span>
-                  </div>
-                  <div className="border-t pt-2 flex justify-between items-center">
-                    <span className="text-xs font-medium text-gray-700">Net</span>
-                    <span
-                      className={`text-sm font-bold ${
-                        kpi.netPosition >= 0 ? "text-green-700" : "text-red-700"
-                      }`}
-                    >
-                      {formatCurrency(kpi.netPosition, displayCurrency)}
-                    </span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${kpi.netPosition >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                      style={{
-                        width: `${
-                          kpi.receivables + kpi.payables > 0
-                            ? Math.min((kpi.receivables / (kpi.receivables + kpi.payables)) * 100, 100)
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Net Pozisyon Kartı */}
+            <Card className="overflow-hidden border-2 border-blue-200">
+              <CardHeader className="pb-3 bg-gradient-to-br from-blue-50 to-indigo-50">
+                <div className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-base font-bold text-blue-800">Net Pozisyon</CardTitle>
+                </div>
+                <CardDescription className="text-xs">
+                  Alacak - Borç dengesi ({displayCurrency})
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">Alacak</span>
+                  <span className="text-sm font-semibold text-green-700">
+                    {formatCurrency(kpi.receivables, displayCurrency)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">Borç</span>
+                  <span className="text-sm font-semibold text-red-700">
+                    {formatCurrency(kpi.payables, displayCurrency)}
+                  </span>
+                </div>
+                <div className="border-t pt-2 flex justify-between items-center">
+                  <span className="text-xs font-medium text-gray-700">Net</span>
+                  <span
+                    className={`text-sm font-bold ${kpi.netPosition >= 0 ? "text-green-700" : "text-red-700"}`}
+                  >
+                    {formatCurrency(kpi.netPosition, displayCurrency)}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${kpi.netPosition >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                    style={{
+                      width: `${
+                        kpi.receivables + kpi.payables > 0
+                          ? Math.min(
+                              (kpi.receivables / (kpi.receivables + kpi.payables)) * 100,
+                              100
+                            )
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </section>
       )}
@@ -611,72 +799,59 @@ export default function DashboardPage() {
         {permissions?.canViewFinance && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
-                    Aylık Nakit Akışı
-                  </CardTitle>
-                  <CardDescription>
-                    Son 6 ay gelir / gider / kar ({displayCurrency})
-                  </CardDescription>
-                </div>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
+                Aylık Nakit Akışı
+              </CardTitle>
+              <CardDescription>
+                Son 6 ay gelir / gider / kar ({displayCurrency})
+                {!hasInvoices && " · Fatura eklenince görünür"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {cashFlow.length === 0 ? (
-                  <p className="text-center text-sm text-gray-400 py-6">Henüz fatura verisi yok.</p>
-                ) : (
-                  cashFlow.map((data) => {
-                    const total = Math.max(data.income + data.expense, 1);
-                    return (
-                      <div key={`${data.month}-${data.year}`} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-gray-700 w-14 shrink-0">
-                            {data.month.slice(0, 3)}
+              {!hasInvoices ? (
+                <div className="text-center py-8 space-y-2">
+                  <FileText className="mx-auto h-8 w-8 text-gray-300" />
+                  <p className="text-sm text-gray-400">
+                    Fatura kaydı eklendikten sonra nakit akışı grafiği burada görünür.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cashFlow.map((data) => (
+                    <div key={`${data.month}-${data.year}`} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-gray-700 w-14 shrink-0">
+                          {data.month.slice(0, 3)}
+                        </span>
+                        <div className="flex gap-3 text-right flex-wrap justify-end">
+                          <span className="text-green-600">
+                            +{formatCurrency(data.income, displayCurrency)}
                           </span>
-                          <div className="flex gap-3 text-right flex-wrap justify-end">
-                            <span className="text-green-600">
-                              +{formatCurrency(data.income, displayCurrency)}
-                            </span>
-                            <span className="text-red-600">
-                              -{formatCurrency(data.expense, displayCurrency)}
-                            </span>
-                            <span
-                              className={`font-bold ${
-                                data.profit >= 0 ? "text-blue-700" : "text-red-700"
-                              }`}
-                            >
-                              ={formatCurrency(data.profit, displayCurrency)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
-                          <div
-                            className="bg-green-400 transition-all"
-                            style={{ width: `${(data.income / (maxCashFlow)) * 100}%` }}
-                          />
-                          <div
-                            className="bg-red-400 transition-all"
-                            style={{ width: `${(data.expense / (maxCashFlow)) * 100}%` }}
-                          />
-                        </div>
-                        <div className="flex gap-2 text-[10px] text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
-                            Gelir
+                          <span className="text-red-600">
+                            -{formatCurrency(data.expense, displayCurrency)}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
-                            Gider
+                          <span
+                            className={`font-bold ${data.profit >= 0 ? "text-blue-700" : "text-red-700"}`}
+                          >
+                            ={formatCurrency(data.profit, displayCurrency)}
                           </span>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+                      <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="bg-green-400 transition-all"
+                          style={{ width: `${(data.income / maxCashFlow) * 100}%` }}
+                        />
+                        <div
+                          className="bg-red-400 transition-all"
+                          style={{ width: `${(data.expense / maxCashFlow) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -703,7 +878,9 @@ export default function DashboardPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{activity.action}</p>
-                        <span className="text-xs font-mono text-gray-500 shrink-0">{activity.position}</span>
+                        <span className="text-xs font-mono text-gray-500 shrink-0">
+                          {activity.position}
+                        </span>
                       </div>
                       {activity.customer && (
                         <p className="text-xs text-gray-500 truncate">{activity.customer}</p>
@@ -744,7 +921,7 @@ export default function DashboardPage() {
             {paginatedItems.length === 0 ? (
               <div className="text-center py-8">
                 <CheckCircle className="mx-auto h-8 w-8 text-green-400 mb-2" />
-                <p className="text-sm text-gray-500">Bekleyen işlem bulunmuyor. Harika!</p>
+                <p className="text-sm text-gray-500">Bekleyen işlem bulunmuyor.</p>
               </div>
             ) : (
               paginatedItems.map((item) => (
