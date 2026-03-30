@@ -62,7 +62,8 @@ WHERE supplier_ref_no IS NULL OR supplier_ref_no = '';
 ALTER TABLE positions DROP CONSTRAINT IF EXISTS positions_supplier_ref_no_unique;
 ALTER TABLE positions ADD CONSTRAINT positions_supplier_ref_no_unique UNIQUE (supplier_ref_no);
 
--- ─── 6. position_trips tablosuna finansal alanlar ────────────────────────────
+-- ─── 6. position_trips finansal alanlar ───────────────────────────────────────
+-- Not: Tablo yoksa önce ADD_POSITION_TRIPS_TABLE.sql veya supabase/migrations/*position_trips*.sql çalıştırın.
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS sales_price DECIMAL(15,2);
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS sales_currency TEXT DEFAULT 'EUR';
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS cost_price DECIMAL(15,2);

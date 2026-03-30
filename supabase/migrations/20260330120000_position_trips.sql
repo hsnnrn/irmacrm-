@@ -1,5 +1,5 @@
--- Pozisyona ek sefer eklemek için position_trips tablosu
--- Supabase SQL Editor'de bir kez çalıştırın (güvenle tekrar çalıştırılabilir).
+-- position_trips: ek seferler (pozisyon başına birden fazla sefer)
+-- Idempotent: güvenle tekrar çalıştırılabilir.
 
 CREATE TABLE IF NOT EXISTS position_trips (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS position_trips (
   updated_at timestamptz DEFAULT now()
 );
 
--- Mevcut eski kurulumlarda eksik sütunları ekle
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS sales_price decimal(15,2);
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS sales_currency text DEFAULT 'EUR';
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS cost_price decimal(15,2);
@@ -30,7 +29,6 @@ ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS cost_currency text DEFAULT '
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS sales_exchange_rate decimal(15,6);
 ALTER TABLE position_trips ADD COLUMN IF NOT EXISTS cost_exchange_rate decimal(15,6);
 
--- trip_no otomatik artırma
 CREATE OR REPLACE FUNCTION set_trip_no()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -76,5 +74,4 @@ CREATE POLICY "Authenticated users can delete position trips"
 
 CREATE INDEX IF NOT EXISTS idx_position_trips_position_id ON position_trips(position_id);
 
--- API şemasının tabloyu görmesi için (Supabase genelde otomatik yeniler; gerekirse Dashboard > API > Reload schema)
 NOTIFY pgrst, 'reload schema';
