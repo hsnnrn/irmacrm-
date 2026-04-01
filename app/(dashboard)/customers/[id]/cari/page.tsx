@@ -94,7 +94,7 @@ export default function CustomerCariPage() {
 
     const allTrips = data?.trips || [];
 
-    // Borç: Satış faturaları varsa onlar (kendi döviz cinsinde), yoksa pozisyon tutarları
+    // Alacak sütunu: kesilen satış faturaları (bizim alacağımız), kendi döviz cinsinde
     if (salesInvoices.length > 0) {
       salesInvoices.forEach((inv) => {
         const position = pos.find((p) => p.id === inv.position_id);
@@ -110,7 +110,7 @@ export default function CustomerCariPage() {
         items.push({
           date: new Date(inv.invoice_date),
           docNo: posLabel || `F-${inv.id.slice(0, 8)}`,
-          type: "BORC",
+          type: "ALACAK",
           description: position
             ? `${posLabel}${plateSuffix} - ${routeDesc} - Satış Faturası`
             : "Satış Faturası",
@@ -131,7 +131,7 @@ export default function CustomerCariPage() {
           items.push({
             date: new Date(position.created_at),
             docNo: `Poz #${position.position_no}`,
-            type: "BORC",
+            type: "ALACAK",
             description: `Poz #${position.position_no}${plateSuffix} - ${position.loading_point} → ${position.unloading_point} - Satış Tutarı`,
             amount: price,
             currency: (position.sales_currency as string) || accountCurrency,
@@ -141,7 +141,7 @@ export default function CustomerCariPage() {
       });
     }
 
-    // Ek Sefer borçları: sadece sales_price girilmiş seferler için
+    // Ek sefer satış tutarları → alacak sütunu
     allTrips.forEach((trip) => {
       const tripSalesPrice = trip.sales_price || 0;
       if (tripSalesPrice > 0 && trip.sales_currency) {
@@ -153,7 +153,7 @@ export default function CustomerCariPage() {
         items.push({
           date: new Date(trip.departure_date || trip.created_at),
           docNo: `Poz #${position?.position_no || "?"} - Sefer #${trip.trip_no}`,
-          type: "BORC",
+          type: "ALACAK",
           description: `Ek Sefer #${trip.trip_no}${plateSuffix} - ${trip.loading_point} → ${trip.unloading_point}`,
           amount: tripSalesPrice,
           currency: trip.sales_currency,
@@ -162,9 +162,11 @@ export default function CustomerCariPage() {
       }
     });
 
-    // Manuel cari hareketler — kendi döviz cinsinde
+    // Ödemeler → borç sütunu; manuel borç (DB BORC) → alacak sütunu (ek borçlandırma)
     payments.forEach((p) => {
       const movType: "BORC" | "ALACAK" = (p.movement_type as "BORC" | "ALACAK") || "ALACAK";
+      const displayType: "BORC" | "ALACAK" =
+        movType === "ALACAK" ? "BORC" : "ALACAK";
       const defaultDesc =
         movType === "ALACAK" ? "Müşteri Ödemesi" : "Manuel Borç Girişi";
       const docNo =
@@ -173,7 +175,7 @@ export default function CustomerCariPage() {
       items.push({
         date: new Date(p.payment_date),
         docNo,
-        type: movType,
+        type: displayType,
         description: p.description || defaultDesc,
         amount: p.amount,
         currency: p.currency,
@@ -181,8 +183,8 @@ export default function CustomerCariPage() {
       });
     });
 
-    // Tarihe göre sıralama (aynı günde BORÇ → ALACAK)
-    const typeOrder: Record<"BORC" | "ALACAK", number> = { BORC: 0, ALACAK: 1 };
+    // Tarihe göre sıralama (aynı günde önce alacak kayıtları — fatura, sonra borç — ödeme)
+    const typeOrder: Record<"BORC" | "ALACAK", number> = { ALACAK: 0, BORC: 1 };
     items.sort((a, b) => {
       const diff = a.date.getTime() - b.date.getTime();
       return diff !== 0 ? diff : typeOrder[a.type] - typeOrder[b.type];
@@ -192,6 +194,7 @@ export default function CustomerCariPage() {
     const moveList: Movement[] = [];
 
     if (previousYearBalance !== 0) {
+      // Pozitif devir = müşteri borcu → borç sütunu; negatif = bizden alacak → alacak sütunu
       moveList.push({
         date: "Önceki Yıl",
         docNo: "-",
@@ -249,7 +252,7 @@ export default function CustomerCariPage() {
         currency,
         totalBorc: vals.borc,
         totalAlacak: vals.alacak,
-        balance: vals.borc - vals.alacak,
+        balance: vals.alacak - vals.borc,
       }))
       .sort(
         (a, b) =>
