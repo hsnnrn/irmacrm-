@@ -6,6 +6,17 @@
 -- ─── 1. Pozisyonlara araç plakası alanı ───────────────────────────────────────
 ALTER TABLE positions ADD COLUMN IF NOT EXISTS vehicle_plate TEXT;
 
+-- ─── 1b. Pozisyonlara özel kur alanları ───────────────────────────────────────
+ALTER TABLE positions
+  ADD COLUMN IF NOT EXISTS sales_exchange_rate DECIMAL(15,6) DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS cost_exchange_rate DECIMAL(15,6) DEFAULT 1;
+
+-- ─── 1c. exchange_rates_snapshot alanı ────────────────────────────────────────
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS exchange_rates_snapshot JSONB;
+
+-- ─── 1d. PostgREST şema önbelleğini yenile ────────────────────────────────────
+NOTIFY pgrst, 'reload schema';
+
 -- ─── 2. supplier_ref_no otomatik oluşturma sekansı ────────────────────────────
 CREATE SEQUENCE IF NOT EXISTS position_ref_seq START 1;
 
